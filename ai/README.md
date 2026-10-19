@@ -62,9 +62,13 @@ Prévoir 10 Go libres sur le PC Hôte avant de lancer `ollama` localement.
 ## Entraîner le détecteur
 
 Le modèle apprend le trafic **normal** de *notre* plateforme : il faut donc la faire tourner
-avec du trafic de transactions fictives avant d'entraîner.
+avec du trafic de transactions fictives avant d'entraîner. `traffic.py` simule des clients
+légitimes en cycles **calme → montée en charge → palier → descente**. Le modèle doit avoir vu
+tous ces régimes : entraîné sur 5 min de trafic stable, il prenait une simple montée en charge
+pour une attaque (fausse alerte constatée en test). D'où **au moins 15-20 min** de collecte.
 
 ```powershell
+.venv\Scripts\python traffic.py --target http://127.0.0.1:8080 --minutes 21   # dans un autre terminal
 docker compose run --rm detector python -m detector.collect --label normal --minutes 20
 docker compose run --rm detector python -m detector.collect --label attack --minutes 5   # pendant l'attaque
 docker compose run --rm detector python -m detector.train    # écrit data/model.joblib et data/report.json
@@ -148,20 +152,31 @@ IsolationForest ne coupe jamais sur une feature constante pendant l'apprentissag
 donc pas une feature qui vaut toujours 0 en temps normal (erreurs 5xx, blocages WAF), alors que
 c'est précisément ce qui bouge lors d'un incident.
 
-**Résultats sur notre plateforme** (collecte réelle du 2026-10-19 : ~59 points de trafic normal
-varié de 0,3 à 10 req/s, ~24 points d'attaque callback → 5xx) :
+**Résultats sur notre plateforme** (collecte réelle du 2026-10-19 : 178 points de trafic normal
+en 15 min — cycles calme / montée / palier / descente, de 0,3 à 4,4 req/s, générés par
+`traffic.py` — et 24 points d'attaque callback → 5xx) :
 
 | Indicateur | Valeur |
 |---|---|
-| Faux positifs (trafic normal) | 0 % |
+| Faux positifs (45 points de trafic normal de test) | 0 % |
 | Précision | 100 % |
 | Rappel (points d'attaque détectés) | 87,5 % |
-| Matrice de confusion | TN 15, FP 0, FN 3, TP 21 |
-| Délai de détection observé (bout en bout) | ~13 s après le début de l'incident |
-| Délai de reprise complète (détection + redémarrage) | ~26 s, nouvelle transaction réussie |
+| Matrice de confusion | TN 45, FP 0, FN 3, TP 21 |
+| Fausses alertes en direct (5 min de trafic variable, 3 cycles) | 0 (score max −0,46, seuil 0) |
+| Délai de reprise complète (détection + redémarrage) | ~30 s, nouvelle transaction réussie |
 
 Les 3 points ratés (FN) sont les tout premiers de l'incident, avant que les fenêtres `rate[30s]`
 ne montent : c'est attendu et sans conséquence (le debounce attend de toute façon 3 points).
+
+**Compromis de sensibilité.** Entraîné sur un trafic normal riche, le modèle tolère mieux les
+variations de charge, mais réagit moins aux petits taux d'erreurs : ~5 erreurs 5xx/s sont
+nécessaires pour qu'il bascule seul (2/s restent sous le seuil). Une API réellement tombée est
+de toute façon couverte par le contrôle de santé actif, indépendant du trafic.
+
+**Fausse alerte corrigée.** Une première version, entraînée sur 5 min de trafic stable (~45 points),
+prenait la *montée en charge* au démarrage du trafic pour une anomalie (score positif à 1,5 req/s) :
+elle a déclenché un redémarrage inutile de l'API pendant un test. Le modèle actuel, entraîné sur
+15 min de cycles variés, ne produit aucun score positif sur la même montée.
 
 **Note sur l'évaluation.** Le découpage train/test du trafic normal est *mélangé* (`shuffle=True`),
 pas chronologique. Les collectes étant courtes, un découpage chronologique isolerait tout un régime
@@ -200,6 +215,7 @@ devient introuvable. Rédiger les docs de l'équipe avec des titres clairs et de
 | Fichier | Rôle |
 |---|---|
 | `config.py` | Tous les réglages (URLs, seuils, modèles), lus depuis l'environnement |
+| `traffic.py` | Simulateur de clients légitimes (trafic normal pour la collecte et la démo) |
 | `detector/features.py` | Les requêtes Prometheus/Loki que le modèle observe |
 | `detector/collect.py` | Enregistre les features dans `data/normal.csv` ou `data/attack.csv` |
 | `detector/train.py` | Entraîne et évalue le modèle |

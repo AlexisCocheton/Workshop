@@ -15,8 +15,9 @@ Nous avons construit un démonstrateur qui prouve qu'un système de paiement cri
 peut **encaisser une attaque et se rétablir seul**, sans intervention humaine. La chaîne
 complète a été validée en conditions réelles :
 
-> transaction normale → attaque depuis le PC Attaquant → détection par machine learning
-> en ~9 s → redémarrage automatique du service → nouvelle transaction réussie (~26 s au total).
+> transaction normale → attaque depuis le PC Attaquant → détection (machine learning +
+> contrôle de santé) en quelques secondes → redémarrage automatique du service → nouvelle
+> transaction réussie (~30 s au total).
 
 Le système réunit les cinq domaines exigés — développement, infrastructure, IA, cybersécurité,
 gouvernance — réellement interconnectés : le modèle ML lit la supervision et déclenche la
@@ -120,27 +121,38 @@ efface l'état dégradé. Quand l'API répond de nouveau et que le ML repasse no
 
 ### 4.1 Performance du détecteur (données réelles)
 
-Modèle entraîné sur ~59 points de trafic normal (0,3 à 10 req/s) et ~24 points d'attaque :
+Modèle entraîné sur 178 points de trafic normal collectés en 15 min (cycles calme, montée en
+charge, palier, descente, de 0,3 à 4,4 req/s) et 24 points d'attaque :
 
 | Indicateur | Valeur |
 |---|---|
-| Taux de faux positifs | **0 %** |
+| Taux de faux positifs (45 points de test) | **0 %** |
 | Précision | **100 %** |
 | Rappel (points d'attaque détectés) | **87,5 %** (21/24) |
-| Matrice de confusion | TN 15, FP 0, FN 3, TP 21 |
+| Matrice de confusion | TN 45, FP 0, FN 3, TP 21 |
+| Fausses alertes en direct (5 min de trafic variable) | **0** |
 
 Les 3 points non détectés sont les tout premiers de l'incident, avant que les fenêtres de calcul
 ne montent — sans conséquence, car le debounce attend de toute façon 3 points.
+
+**Compromis assumé** : le modèle tolère les variations de charge normales, au prix d'une moindre
+sensibilité aux petits taux d'erreurs (~5 erreurs 5xx/s nécessaires). Une API réellement tombée
+reste détectée par le contrôle de santé actif, indépendant du trafic.
 
 ### 4.2 Chaîne complète (bout en bout)
 
 | Étape | Mesure |
 |---|---|
-| Détection de l'anomalie | ~9 s après le début de l'incident |
-| Reprise complète (détection + redémarrage) | ~26-29 s |
+| Détection de l'anomalie | quelques secondes (contrôle de santé + ML) |
+| Reprise complète (détection + redémarrage) | ~30 s |
 | Nouvelle transaction après reprise | Réussie (HTTP 200) |
 
-### 4.3 Deux enseignements d'ingénierie
+### 4.3 Trois enseignements d'ingénierie
+
+- **Couvrir tous les régimes normaux** : une première version, entraînée sur 5 min de trafic stable,
+  prenait la simple *montée en charge* au démarrage du trafic pour une attaque, et a déclenché un
+  redémarrage inutile en test. Un simulateur de clients (`ai/traffic.py`) alternant phases calmes,
+  montées, paliers et descentes, et 15 min de collecte, ont supprimé cette fausse alerte.
 
 - **Évaluation honnête** : le découpage train/test est *mélangé*, pas chronologique. Sur des
   collectes courtes, un découpage chronologique isolait les pics de charge dans le test et gonflait
@@ -189,7 +201,7 @@ Mesures de traitement : WAF, détection ML, remédiation automatique, SIEM, durc
 
 ### 6.2 Continuité et reprise (PCA/PRA — `gouvernance/pca-pra.md`)
 
-- **RTO visé** : quelques dizaines de secondes, cohérent avec la reprise automatique mesurée (~26 s).
+- **RTO visé** : quelques dizaines de secondes, cohérent avec la reprise automatique mesurée (~30 s).
 - **RPO** : proche de zéro — les transactions sont persistées en base avant la réponse.
 - **Couvert** par la reprise automatique : l'indisponibilité du service. **Non couvert** : une
   compromission persistante, une fuite de données, une corruption de la base — un redémarrage restaure

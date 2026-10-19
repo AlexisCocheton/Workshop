@@ -3,11 +3,11 @@
   "recall": 0.875,
   "precision": 1.0,
   "confusion_matrix": {
-    "tn": 15,
+    "tn": 45,
     "fp": 0,
     "fn": 3,
     "tp": 21
   },
-  "n_normal_test": 15,
+  "n_normal_test": 45,
   "n_attack": 24
 }

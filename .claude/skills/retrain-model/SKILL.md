@@ -26,13 +26,23 @@ les vrais noms de métriques et de labels avant d'aller plus loin.
 
 ## 2. Collecter le trafic normal (au moins 20 minutes)
 
+Dans un premier terminal, lancer le simulateur de clients (depuis `ai/`) :
+
+```powershell
+.venv\Scripts\python traffic.py --target http://127.0.0.1:8080 --minutes 21
+```
+
+Dans un second terminal, collecter :
+
 ```powershell
 docker compose run --rm detector python -m detector.collect --label normal --minutes 20
 ```
 
-Le trafic doit ressembler à celui de la démo : générateur de transactions lancé,
-quelques erreurs de saisie normales. Aucune attaque pendant cette phase, sinon le
-modèle apprendra l'attaque comme « normale ». Repartir d'un fichier vide si le
+Le simulateur enchaîne phases calmes, montées en charge, paliers et descentes, avec
+quelques erreurs 4xx ordinaires. Ne pas raccourcir la collecte : avec 5 minutes de
+trafic stable, le modèle a pris une montée en charge pour une attaque (fausse alerte
+et redémarrage inutile constatés en test). Aucune attaque pendant cette phase, sinon
+le modèle apprendra l'attaque comme « normale ». Repartir d'un fichier vide si le
 comportement de l'API a changé (supprimer `ai/data/normal.csv`).
 
 ## 3. Collecter pendant l'attaque
