@@ -152,7 +152,16 @@ pas chronologique. Les collectes étant courtes, un découpage chronologique iso
 de débit (les pics de charge) dans le test, que le modèle n'aurait jamais appris, ce qui gonflerait
 artificiellement les faux positifs (mesuré : 67 % en chronologique contre 0 % en mélangé, mêmes données).
 
-**Limites.**
+## Assistant RAG — vérifié en réel
+
+Testé le 2026-10-19 avec `qwen2.5:3b` + `nomic-embed-text` sur Ollama local : l'assistant
+répond en français à partir de `docs/`, cite sa source, et dit « je ne sais pas » hors périmètre.
+Les passages sont découpés en 1500 caractères (et non 800) pour qu'un **tableau Markdown** ne soit
+pas coupé entre son en-tête et ses lignes — sinon une ligne comme « err_5xx_rate → l'API plante »
+devient introuvable. Rédiger les docs de l'équipe avec des titres clairs et des tableaux courts.
+
+## Limites du détecteur
+
 - Le modèle ne connaît que le trafic normal enregistré : si l'usage change, il faut réentraîner.
 - Une feature toujours nulle en temps normal n'a pas d'échelle apprise : une petite valeur
   (ex : 0,5 erreur 5xx/s) passe inaperçue, seule une hausse franche est détectée.

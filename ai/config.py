@@ -29,4 +29,4 @@ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")  # 8B paramètres maximum (sujet §3.3)
 EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
 DETECTOR_URL = os.getenv("DETECTOR_URL", "http://detector:8000")
-TOP_K = int(os.getenv("TOP_K", "4"))  # nombre de passages de documentation envoyés au LLM
+TOP_K = int(os.getenv("TOP_K", "5"))  # nombre de passages de documentation envoyés au LLM

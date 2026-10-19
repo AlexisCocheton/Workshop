@@ -35,7 +35,10 @@ def load_docs(folder: Path = DOCS_DIR) -> list[Document]:
         for path in sorted(folder.rglob("*"))
         if path.suffix in {".md", ".txt"}
     ]
-    splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=100)
+    # Passages assez grands pour qu'un tableau Markdown (en-tête + lignes) ne
+    # soit pas coupé en deux : sinon une ligne « err_5xx_rate → l'API plante »
+    # serait séparée de l'en-tête du tableau et deviendrait introuvable.
+    splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=150)
     return splitter.split_documents(docs)
 
 
