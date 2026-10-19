@@ -10,10 +10,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from assistant.rag import answer
-from config import DETECTOR_URL
+from config import DASHBOARD_ORIGINS, DETECTOR_URL
 
 app = FastAPI(title="Assistant opérateur (RAG)")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=DASHBOARD_ORIGINS, allow_methods=["*"], allow_headers=["*"])
 
 
 class Question(BaseModel):

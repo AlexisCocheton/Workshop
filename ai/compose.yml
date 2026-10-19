@@ -12,7 +12,8 @@ services:
       PROMETHEUS_URL: http://prometheus:9090
       LOKI_URL: http://loki:3100
       REMEDIATION_URL: ${REMEDIATION_URL:-http://remediation:8200/incident}
-      REMEDIATION_TOKEN: ${REMEDIATION_TOKEN:-dev-token}  # fourni par Vault/SOPS en vrai
+      REMEDIATION_TOKEN: ${REMEDIATION_TOKEN:?définir REMEDIATION_TOKEN dans .env}  # fourni par Vault/SOPS en vrai
+      DASHBOARD_ORIGINS: ${DASHBOARD_ORIGINS:-http://localhost:3000}
     volumes:
       - ./data:/app/data  # CSV collectés + modèle entraîné
     ports:
@@ -25,6 +26,7 @@ services:
       OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}  # ou l'IP du PC de délestage IA
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
       DETECTOR_URL: http://detector:8000
+      DASHBOARD_ORIGINS: ${DASHBOARD_ORIGINS:-http://localhost:3000}
     volumes:
       - ./docs:/app/docs:ro  # l'assistant lit la documentation, sans pouvoir la modifier
     ports:

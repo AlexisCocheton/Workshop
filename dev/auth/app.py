@@ -12,12 +12,18 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret")
+# Secret JWT obligatoire (partagé avec l'API qui vérifie les jetons).
+JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET:
+    raise RuntimeError("JWT_SECRET est obligatoire.")
 DEMO_USER = os.getenv("DEMO_USER", "app")
 DEMO_PASSWORD = os.getenv("DEMO_PASSWORD", "app")
 
+# Origines autorisées pour le dashboard (CORS).
+ALLOWED_ORIGINS = os.getenv("DASHBOARD_ORIGINS", "http://localhost:3000").split(",")
+
 app = FastAPI(title="Service d'authentification")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_methods=["*"], allow_headers=["*"])
 
 
 class Credentials(BaseModel):

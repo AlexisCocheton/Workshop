@@ -35,3 +35,7 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")  # 8B paramètres maximum
 EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
 DETECTOR_URL = os.getenv("DETECTOR_URL", "http://detector:8000")
 TOP_K = int(os.getenv("TOP_K", "5"))  # nombre de passages de documentation envoyés au LLM
+
+# --- Dashboard ---
+# Origines autorisées pour les appels du dashboard (CORS), au lieu de tout ouvrir.
+DASHBOARD_ORIGINS = os.getenv("DASHBOARD_ORIGINS", "http://localhost:3000").split(",")

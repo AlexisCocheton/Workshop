@@ -20,7 +20,14 @@ from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, Gauge, generate_latest
 
-from config import CONSECUTIVE_POINTS, MODEL_PATH, POLL_SECONDS, REMEDIATION_TOKEN, REMEDIATION_URL
+from config import (
+    CONSECUTIVE_POINTS,
+    DASHBOARD_ORIGINS,
+    MODEL_PATH,
+    POLL_SECONDS,
+    REMEDIATION_TOKEN,
+    REMEDIATION_URL,
+)
 from detector.features import FEATURE_NAMES, api_healthy, fetch_now
 
 ANOMALY_SCORE = Gauge("aiops_anomaly_score", "Score du modèle : > 0 = point anormal")
@@ -141,7 +148,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Détecteur d'anomalies AIOps", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=DASHBOARD_ORIGINS, allow_methods=["*"], allow_headers=["*"])
 
 
 @app.get("/status")

@@ -17,7 +17,8 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-payments}
       POSTGRES_USER: ${POSTGRES_USER:-app}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+      # Secrets : échec explicite si absents du .env (pas de valeur faible par défaut).
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?définir POSTGRES_PASSWORD dans .env}
     volumes:
       - db:/var/lib/postgresql/data
       - ./dev/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -26,16 +27,18 @@ services:
     build: ./dev/auth
     container_name: auth
     environment:
-      JWT_SECRET: ${JWT_SECRET:-dev-secret}
+      JWT_SECRET: ${JWT_SECRET:?définir JWT_SECRET dans .env}
       DEMO_USER: ${DEMO_USER:-app}
       DEMO_PASSWORD: ${DEMO_PASSWORD:-app}
+      DASHBOARD_ORIGINS: ${DASHBOARD_ORIGINS:-http://localhost:3000}
 
   api:
     build: ./dev/api
     container_name: api
     environment:
-      JWT_SECRET: ${JWT_SECRET:-dev-secret}
-      DB_DSN: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@db:5432/${POSTGRES_DB:-payments}
+      JWT_SECRET: ${JWT_SECRET:?définir JWT_SECRET dans .env}
+      DB_DSN: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:?définir POSTGRES_PASSWORD dans .env}@db:5432/${POSTGRES_DB:-payments}
+      DASHBOARD_ORIGINS: ${DASHBOARD_ORIGINS:-http://localhost:3000}
     depends_on:
       - db
 
@@ -43,8 +46,9 @@ services:
     build: ./dev/remediation
     container_name: remediation
     environment:
-      REMEDIATION_TOKEN: ${REMEDIATION_TOKEN:-dev-token}
+      REMEDIATION_TOKEN: ${REMEDIATION_TOKEN:?définir REMEDIATION_TOKEN dans .env}
       TARGET_CONTAINER: api
+      DASHBOARD_ORIGINS: ${DASHBOARD_ORIGINS:-http://localhost:3000}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock  # seul service avec accès Docker
     ports:
@@ -104,12 +108,12 @@ services:
     image: grafana/grafana:11.3.0
     container_name: grafana
     environment:
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?définir GRAFANA_PASSWORD dans .env}
     volumes:
       - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
-      - "3001:3000"
+      - "127.0.0.1:3001:3000"  # supervision : loopback seulement, pas exposée au réseau
     depends_on:
       - prometheus
       - loki

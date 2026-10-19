@@ -19,11 +19,21 @@ Mesures défensives appliquées à la plateforme, et pourquoi.
 
 ## Privilèges et secrets
 
-- Un seul composant a un accès au socket Docker : le moteur de remédiation. Son
-  endpoint est protégé par un jeton Bearer. Aucun autre service (y compris
-  l'assistant IA) ne peut agir sur le système.
-- Les secrets viennent de `.env` (jamais versionné en clair), chiffrable avec
-  SOPS (voir `secrets/`).
+- Trois composants touchent au socket Docker, avec des rôles distincts :
+  - **remédiation** : accès en lecture/écriture pour redémarrer un conteneur.
+    C'est le seul à **agir** sur le système. Son endpoint est protégé par un
+    jeton Bearer **obligatoire** (le service refuse de démarrer sans jeton) et
+    la comparaison du jeton est à temps constant.
+  - **promtail** : accès en lecture seule, pour découvrir les conteneurs et
+    collecter leurs logs (observabilité). Il n'exécute aucune action.
+  - **cadvisor** : conteneur privilégié avec montage de l'hôte en lecture seule,
+    pour les métriques système. Nécessaire à l'observabilité ; à remplacer par
+    des montages ciblés hors contexte démo.
+  Aucun autre service (API, auth, détecteur, assistant IA) ne peut agir sur le système.
+- Les secrets (mots de passe, jeton de remédiation, clé JWT) viennent de `.env`
+  (jamais versionné en clair), chiffrable avec SOPS (voir `secrets/`). Aucune
+  valeur faible par défaut : les services refusent de démarrer si un secret
+  critique manque.
 
 ## WAF
 

@@ -22,8 +22,15 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_
 from pydantic import BaseModel
 from starlette.responses import Response
 
-JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret")
+# Le secret JWT est obligatoire : sans lui, n'importe qui pourrait forger un
+# jeton valide. On refuse de démarrer plutôt que d'utiliser un secret par défaut.
+JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET:
+    raise RuntimeError("JWT_SECRET est obligatoire.")
 DB_DSN = os.getenv("DB_DSN", "postgresql://app:app@db:5432/payments")
+
+# Origines autorisées pour le dashboard (CORS), au lieu de tout ouvrir.
+ALLOWED_ORIGINS = os.getenv("DASHBOARD_ORIGINS", "http://localhost:3000").split(",")
 
 # Métriques exposées sur /metrics. Les noms correspondent à ce que lit le
 # détecteur IA (ai/detector/features.py) : ne pas les renommer sans prévenir.
@@ -41,7 +48,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="API de paiement", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_methods=["*"], allow_headers=["*"])
 bearer = HTTPBearer()
 
 
