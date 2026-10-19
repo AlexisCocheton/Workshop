@@ -65,7 +65,7 @@ docker compose restart detector
 | `req_rate` | Prometheus, API métier | `http_requests_total` |
 | `err_4xx_rate`, `err_5xx_rate` | Prometheus, API métier | `http_requests_total{status=~"4.."}`, `{status=~"5.."}` |
 | `latency_p95` | Prometheus, API métier | `http_request_duration_seconds_bucket` |
-| `api_cpu` | Prometheus, cAdvisor | `container_cpu_usage_seconds_total{name=~".*api.*"}` |
+| `api_cpu` | Prometheus, API elle-même | `process_cpu_seconds_total{job="api"}` (cAdvisor n'expose pas le label `name` sur Docker Desktop) |
 | `waf_blocks` | Loki, logs du WAF | `{container="waf"} \|= "403"` |
 
 **Ce que l'IA envoie** au moteur de remédiation, à chaque changement d'état :

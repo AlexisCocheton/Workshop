@@ -33,8 +33,9 @@ section « Contrat d'interface » de `ai/README.md`.
 
 ## Contrat qui relie l'IA aux autres pôles
 
-- L'`api` expose `http_requests_total{status}` et `http_request_duration_seconds_bucket` ; cAdvisor donne
-  `container_cpu_usage_seconds_total{name=~".*api.*"}` ; les logs du `waf` arrivent dans Loki sous `container="waf"`.
+- L'`api` expose `http_requests_total{status}`, `http_request_duration_seconds_bucket` et
+  `process_cpu_seconds_total{job="api"}` (CPU, source de `api_cpu` ; cAdvisor n'a pas le label `name`
+  sur Docker Desktop) ; les logs du `waf` arrivent dans Loki sous `container="waf"`.
   Ces noms sont dans `ai/detector/features.py`.
 - Le détecteur POST sur `http://remediation:8200/incident` (Bearer `REMEDIATION_TOKEN`) un corps
   `{event, score, top_features, timestamp}`.
