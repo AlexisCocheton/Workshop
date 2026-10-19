@@ -21,12 +21,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, Gauge, generate_latest
 
 from config import CONSECUTIVE_POINTS, MODEL_PATH, POLL_SECONDS, REMEDIATION_TOKEN, REMEDIATION_URL
-from detector.features import FEATURE_NAMES, fetch_now
+from detector.features import FEATURE_NAMES, api_healthy, fetch_now
 
 ANOMALY_SCORE = Gauge("aiops_anomaly_score", "Score du modèle : > 0 = point anormal")
 ANOMALY = Gauge("aiops_anomaly", "1 si une anomalie est déclarée (après debounce), sinon 0")
 
-status = {"state": "starting", "score": None, "values": {}, "top_features": [], "error": None}
+status = {"state": "starting", "score": None, "api_healthy": None, "values": {}, "top_features": [], "error": None}
 
 
 class Debouncer:
@@ -111,10 +111,18 @@ def run_forever():
             continue
 
         point_score = score(model, values)
-        event = debouncer.update(point_score > 0)
+        healthy = api_healthy()
+        # Un point est anormal si le ML l'estime anormal OU si l'API ne répond
+        # pas. Le contrôle de santé rattrape deux angles morts : une API tombée
+        # sans trafic (pas de 5xx à voir), et un « faux retour à la normale »
+        # après un redémarrage raté (le ML ne verrait plus d'erreurs, mais
+        # l'API resterait cassée). On ne déclare la reprise que si l'API répond.
+        is_anomalous = point_score > 0 or not healthy
+        event = debouncer.update(is_anomalous)
         status.update(
             state="anomaly" if debouncer.in_anomaly else "normal",
             score=round(point_score, 3),
+            api_healthy=healthy,
             values=values,
             top_features=explain(model, values),
             error=None,

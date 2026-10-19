@@ -8,7 +8,7 @@ import math
 
 import httpx
 
-from config import LOKI_URL, PROMETHEUS_URL
+from config import API_HEALTH_URL, LOKI_URL, PROMETHEUS_URL
 
 # nom de la feature -> (source, requête)
 FEATURES = {
@@ -50,3 +50,15 @@ def fetch_now() -> dict[str, float]:
         value = float(result[0]["value"][1]) if result else 0.0
         values[name] = 0.0 if math.isnan(value) else value
     return values
+
+
+def api_healthy() -> bool:
+    """Contrôle de santé actif : l'API répond-elle 200 sur /healthz ?
+
+    Indépendant du ML et du trafic : une API tombée est vue même si personne ne
+    l'appelle. Injoignable ou code != 200 (ex : 503) -> non saine.
+    """
+    try:
+        return httpx.get(API_HEALTH_URL, timeout=3).status_code == 200
+    except httpx.HTTPError:
+        return False

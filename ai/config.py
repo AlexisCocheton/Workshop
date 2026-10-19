@@ -14,6 +14,11 @@ DOCS_DIR = ROOT / "docs"
 PROMETHEUS_URL = os.getenv("PROMETHEUS_URL", "http://prometheus:9090")
 LOKI_URL = os.getenv("LOKI_URL", "http://loki:3100")
 
+# Contrôle de santé actif : le détecteur sonde directement l'API métier.
+# Permet de voir une API tombée même sans trafic, et de ne déclarer la reprise
+# que si l'API répond vraiment (« un conteneur qui redémarre n'est pas une preuve »).
+API_HEALTH_URL = os.getenv("API_HEALTH_URL", "http://api:8000/healthz")
+
 # --- Détecteur d'anomalies ---
 MODEL_PATH = DATA_DIR / "model.joblib"
 POLL_SECONDS = float(os.getenv("POLL_SECONDS", "5"))            # un point de mesure toutes les 5 s

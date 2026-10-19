@@ -4,7 +4,7 @@ La partie IA comporte deux composants aux rôles bien séparés (sujet §3.3) :
 
 | Composant | Rôle | Agit sur le système ? |
 |---|---|---|
-| `detector` | Détecte une anomalie par machine learning à partir de Prometheus et Loki, puis prévient la remédiation | **Non** : il prévient, le moteur de remédiation (pôle Dev) décide et agit |
+| `detector` | Détecte une anomalie par machine learning (Prometheus/Loki) **et** par contrôle de santé actif de l'API, puis prévient la remédiation | **Non** : il prévient, le moteur de remédiation (pôle Dev) décide et agit |
 | `assistant` | Répond aux questions des opérateurs à partir de la documentation de l'équipe (RAG, Ollama + LangChain) | **Non** : lecture seule, aucun outil |
 
 ## Le flux
@@ -17,6 +17,23 @@ API paiement, WAF ──> Prometheus + Loki ──> detector (modèle LOF) ─�
 
 Opérateur ──> dashboard ──> assistant /ask ──> passages de docs/ + LLM local (Ollama)
 ```
+
+## Détection : ML + contrôle de santé actif
+
+Le détecteur combine deux signaux à chaque cycle :
+
+1. **Le modèle ML** (LocalOutlierFactor) sur les métriques Prometheus/Loki : détecte
+   les comportements anormaux (pics de 5xx, de trafic, de blocages WAF…).
+2. **Un contrôle de santé actif** : il interroge directement `GET /healthz` de l'API.
+
+Règle : **anomalie si le ML la signale OU si l'API ne répond pas** ; **retour à la
+normale seulement si le ML est normal ET l'API répond 200**.
+
+Le contrôle de santé rattrape deux angles morts du ML seul — vérifiés en test :
+- une **API tombée sans trafic** (aucune erreur 5xx à observer) est quand même détectée ;
+- après un redémarrage, on ne déclare « recovered » que si l'API répond vraiment, ce qui
+  évite un **faux retour à la normale** sous attaque persistante. C'est la réponse directe
+  au sujet : « un conteneur qui redémarre ne constitue pas, à lui seul, une preuve de reprise ».
 
 ## Lancer
 

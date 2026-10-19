@@ -57,6 +57,26 @@ def test_debouncer_needs_n_consecutive_points():
     assert [debouncer.update(False) for _ in range(3)] == [None, None, "recovered"]
 
 
+def test_api_healthy_reads_healthz(monkeypatch):
+    class FakeResponse:
+        def __init__(self, code):
+            self.status_code = code
+
+    monkeypatch.setattr(features.httpx, "get", lambda url, timeout: FakeResponse(200))
+    assert features.api_healthy() is True
+
+    monkeypatch.setattr(features.httpx, "get", lambda url, timeout: FakeResponse(503))
+    assert features.api_healthy() is False
+
+
+def test_api_healthy_false_when_unreachable(monkeypatch):
+    def boom(url, timeout):
+        raise features.httpx.ConnectError("injoignable")
+
+    monkeypatch.setattr(features.httpx, "get", boom)
+    assert features.api_healthy() is False
+
+
 def test_fetch_now_turns_empty_and_nan_into_zero(monkeypatch):
     answers = iter([[], [{"value": [0, "NaN"]}]] + [[{"value": [0, "2.5"]}]] * len(FEATURE_NAMES))
     monkeypatch.setattr(features, "_query", lambda source, query: next(answers))

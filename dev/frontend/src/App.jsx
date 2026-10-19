@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 
-// Le navigateur passe par le WAF (port 8080) pour l'API, et joint directement
-// les services de supervision publiés sur l'hôte. Adapter si besoin.
-const WAF = "http://localhost:8080";
-const DETECTOR = "http://localhost:8000";
-const REMEDIATION = "http://localhost:8200";
+// Le navigateur passe par le WAF pour l'API, et joint directement les services
+// de supervision publiés sur l'hôte. Les URLs sont configurables (variables
+// VITE_*) pour s'adapter aux ports réels de la machine ; valeurs par défaut =
+// ports du compose.yml.
+const WAF = import.meta.env.VITE_WAF_URL || "http://localhost:8080";
+const DETECTOR = import.meta.env.VITE_DETECTOR_URL || "http://localhost:8000";
+const REMEDIATION = import.meta.env.VITE_REMEDIATION_URL || "http://localhost:8200";
 
 const COLORS = {
   normal: "bg-green-100 text-green-800",
@@ -67,6 +69,11 @@ export default function App() {
           <h2 className="mb-3 font-semibold">État du détecteur d'anomalies</h2>
           <span className={`rounded px-3 py-1 text-sm font-medium ${badge}`}>{status.state}</span>
           {status.score != null && <span className="ml-3 text-sm">score : {status.score}</span>}
+          {status.api_healthy != null && (
+            <span className="ml-3 text-sm">
+              API : {status.api_healthy ? "✅ en ligne" : "❌ injoignable"}
+            </span>
+          )}
           {status.top_features?.length > 0 && (
             <ul className="mt-3 text-sm text-slate-600">
               {status.top_features.map((feature) => (
