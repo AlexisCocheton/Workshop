@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/Scripts/python.exe -m pytest*)",
+      "Bash(ai/.venv/Scripts/python.exe -m pytest*)",
+      "Bash(.venv/Scripts/python.exe -m pip install -r requirements.txt*)",
+      "Bash(.venv/Scripts/python.exe -m detector.*)",
+      "Bash(docker compose ps*)",
+      "Bash(docker compose logs*)",
+      "Bash(docker compose build*)",
+      "Bash(docker compose up*)",
+      "Bash(docker compose restart*)",
+      "Bash(docker compose run --rm detector python -m detector.*)",
+      "Bash(docker compose exec ollama ollama*)",
+      "Bash(curl -s http://127.0.0.1:*)",
+      "Bash(curl -s http://localhost:*)"
+    ],
+    "deny": [
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(**/*.key)",
+      "Read(**/*.pem)",
+      "Read(**/secrets/**)"
+    ]
+  }
+}

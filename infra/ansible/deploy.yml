@@ -1,0 +1,18 @@
+---
+# Déploie (ou redéploie) toute la plateforme sur le PC Hôte.
+# Usage : ansible-playbook -i inventory.ini deploy.yml
+#
+# Rôle d'Ansible dans le dispositif : automatiser le déploiement reproductible
+# de la stack Docker Compose. Docker Compose décrit QUOI lancer ; Ansible décrit
+# COMMENT et OÙ le lancer (et pourrait, demain, viser plusieurs hôtes).
+
+- name: Déploiement de RESILIENCE-ALPHA
+  hosts: hote
+  vars:
+    project_dir: "{{ playbook_dir }}/../.."
+  tasks:
+    - name: Démarrer la plateforme avec Docker Compose
+      community.docker.docker_compose_v2:
+        project_src: "{{ project_dir }}"
+        state: present
+        pull: missing

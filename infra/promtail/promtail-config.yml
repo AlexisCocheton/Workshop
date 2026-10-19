@@ -1,0 +1,19 @@
+# Promtail découvre les conteneurs Docker et envoie leurs logs à Loki.
+# Le label `container` (ex : container="waf") est celui qu'utilise le
+# détecteur IA pour compter les blocages du WAF.
+
+server:
+  http_listen_port: 9080
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/(.*)"            # enlève le "/" initial du nom de conteneur
+        target_label: container

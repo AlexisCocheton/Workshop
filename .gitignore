@@ -1,0 +1,33 @@
+# --- Secrets (jamais en clair) ---
+.env
+*.env
+!.env.example
+cyber/secrets/key.txt
+*.key
+*.pem
+
+# --- Override local de démonstration (ports spécifiques à une machine) ---
+compose.override.yml
+
+# --- Données et modèles entraînés (régénérés par /retrain-model) ---
+ai/data/*.csv
+ai/data/*.joblib
+# on garde ai/data/report.json comme preuve de résultats
+!ai/data/report.json
+
+# --- Python ---
+**/.venv/
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+
+# --- Node ---
+dev/frontend/node_modules/
+dev/frontend/dist/
+
+# --- Énoncés du sujet (fournis, non livrables) ---
+*.pdf
+*.pptx
+
+# --- Divers ---
+.DS_Store

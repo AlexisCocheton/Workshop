@@ -1,0 +1,49 @@
+{
+  "title": "RESILIENCE-ALPHA",
+  "uid": "resilience",
+  "schemaVersion": 39,
+  "timezone": "browser",
+  "time": { "from": "now-15m", "to": "now" },
+  "refresh": "5s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Score d'anomalie (IA)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        { "expr": "aiops_anomaly_score", "legendFormat": "score", "refId": "A" },
+        { "expr": "aiops_anomaly", "legendFormat": "anomalie (0/1)", "refId": "B" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Taux de requêtes par statut",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        { "expr": "sum by (status) (rate(http_requests_total[1m]))", "legendFormat": "{{status}}", "refId": "A" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Latence p95 (s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[1m])))", "legendFormat": "p95", "refId": "A" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Logs WAF (blocages)",
+      "type": "logs",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        { "expr": "{container=\"waf\"}", "refId": "A" }
+      ]
+    }
+  ]
+}

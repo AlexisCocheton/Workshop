@@ -1,0 +1,32 @@
+# WAF applicatif (Caddy) : seule porte d'entrée de la plateforme.
+# Il relaie vers les services internes et bloque les requêtes manifestement
+# malveillantes (injection SQL, XSS, traversée de répertoire) en 403.
+# Les logs JSON sont envoyés sur stdout, donc collectés par Loki (label waf).
+{
+	admin off
+	log {
+		output stdout
+		format json
+	}
+}
+
+:8080 {
+	# Filtrage applicatif : motifs d'attaque courants -> 403.
+	# On couvre les formes en clair ET encodées (%20, %3Cscript), car l'URI
+	# est brute. Classes POSIX ([[:space:]]) pour éviter les backslashes.
+	@malveillant `{http.request.uri}.matches("(?i)(union([[:space:]]|%20|\\+)+select|or([[:space:]]|%20|\\+)+1=1|(<|%3c)script|([.]|%2e){2}/|/etc/passwd)")`
+	handle @malveillant {
+		respond "Requête bloquée par le WAF" 403
+	}
+
+	# Service d'authentification.
+	handle /auth/* {
+		uri strip_prefix /auth
+		reverse_proxy auth:8100
+	}
+
+	# Tout le reste -> API de paiement.
+	handle {
+		reverse_proxy api:8000
+	}
+}

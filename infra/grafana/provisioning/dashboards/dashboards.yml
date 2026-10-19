@@ -1,0 +1,8 @@
+# Charge automatiquement les dashboards du dossier monté.
+apiVersion: 1
+
+providers:
+  - name: resilience
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

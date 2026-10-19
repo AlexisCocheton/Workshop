@@ -1,0 +1,118 @@
+# Orchestration complète de RESILIENCE-ALPHA (les 5 piliers).
+# Lancement : docker compose up -d --build
+#
+# La partie IA est incluse depuis ai/compose.yml (détecteur, assistant, ollama).
+# Les secrets et réglages viennent du fichier .env (voir .env.example).
+
+name: resilience
+
+include:
+  - ai/compose.yml
+
+services:
+  # --- Pôle Dev : microservices métier + reprise ---
+  db:
+    image: postgres:17-alpine
+    container_name: db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-payments}
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+    volumes:
+      - db:/var/lib/postgresql/data
+      - ./dev/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+  auth:
+    build: ./dev/auth
+    container_name: auth
+    environment:
+      JWT_SECRET: ${JWT_SECRET:-dev-secret}
+      DEMO_USER: ${DEMO_USER:-app}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-app}
+
+  api:
+    build: ./dev/api
+    container_name: api
+    environment:
+      JWT_SECRET: ${JWT_SECRET:-dev-secret}
+      DB_DSN: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@db:5432/${POSTGRES_DB:-payments}
+    depends_on:
+      - db
+
+  remediation:
+    build: ./dev/remediation
+    container_name: remediation
+    environment:
+      REMEDIATION_TOKEN: ${REMEDIATION_TOKEN:-dev-token}
+      TARGET_CONTAINER: api
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock  # seul service avec accès Docker
+    ports:
+      - "127.0.0.1:8200:8200"
+
+  frontend:
+    build: ./dev/frontend
+    container_name: frontend
+    ports:
+      - "3000:3000"
+
+  # --- Pôle Cyber : WAF (seule porte d'entrée) ---
+  waf:
+    image: caddy:2.8-alpine
+    container_name: waf
+    volumes:
+      - ./cyber/waf/Caddyfile:/etc/caddy/Caddyfile:ro
+    ports:
+      - "8080:8080"  # atteint par le PC Attaquant
+    depends_on:
+      - api
+      - auth
+
+  # --- Pôle Infra : observabilité ---
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: prometheus
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+
+  loki:
+    image: grafana/loki:3.2.1
+    container_name: loki
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./infra/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+
+  promtail:
+    image: grafana/promtail:3.2.1
+    container_name: promtail
+    command: -config.file=/etc/promtail/promtail-config.yml
+    volumes:
+      - ./infra/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+      - loki
+
+volumes:
+  db:
