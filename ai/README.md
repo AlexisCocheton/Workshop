@@ -64,7 +64,6 @@ docker compose restart detector
 |---|---|---|
 | `req_rate` | Prometheus, API métier | `http_requests_total` |
 | `err_4xx_rate`, `err_5xx_rate` | Prometheus, API métier | `http_requests_total{status=~"4.."}`, `{status=~"5.."}` |
-| `latency_p95` | Prometheus, API métier | `http_request_duration_seconds_bucket` |
 | `api_cpu` | Prometheus, API elle-même | `process_cpu_seconds_total{job="api"}` (cAdvisor n'expose pas le label `name` sur Docker Desktop) |
 | `waf_blocks` | Loki, logs du WAF | `{container="waf"} \|= "403"` |
 
@@ -151,6 +150,16 @@ ne montent : c'est attendu et sans conséquence (le debounce attend de toute fa�
 pas chronologique. Les collectes étant courtes, un découpage chronologique isolerait tout un régime
 de débit (les pics de charge) dans le test, que le modèle n'aurait jamais appris, ce qui gonflerait
 artificiellement les faux positifs (mesuré : 67 % en chronologique contre 0 % en mélangé, mêmes données).
+
+**Deux réglages appris en conditions réelles (importants pour la fiabilité en démo) :**
+- **`n_neighbors` adapté à la taille du jeu** (`max(5, min(20, n//3))`). Avec une collecte courte
+  (~45 points d'entraînement), un `n_neighbors` fixé à 20 fait dégénérer LOF : un incident franc
+  (5xx = 20/s) obtenait un score négatif (classé normal) au lieu de +37. C'était un faux négatif
+  silencieux qui aurait fait rater la reprise en direct.
+- **`latency_p95` retirée des features.** Sur un PC Hôte saturé (toute la stack + Ollama), la latence
+  au repos (~0,2 s) dépasse celle de l'entraînement et déclenche des faux positifs. L'incident se
+  détecte très bien sans elle (surtout via `err_5xx_rate`). Elle est commentée dans `features.py`,
+  réactivable sur une machine moins chargée.
 
 ## Assistant RAG — vérifié en réel
 

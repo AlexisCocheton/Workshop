@@ -31,9 +31,13 @@ def train(normal: pd.DataFrame):
     l'apprentissage (ex : 0 erreur 5xx en temps normal) et ne voit donc pas
     une panne qui fait monter cette feature (voir README, « Choix du modèle »).
     """
+    # n_neighbors doit rester bien inférieur au nombre de points, sinon LOF
+    # dégénère (sur des collectes courtes de ~45 points, 20 voisins donnent des
+    # scores aberrants). On le plafonne à un tiers du jeu, borné entre 5 et 20.
+    n_neighbors = max(5, min(20, len(normal) // 3))
     model = make_pipeline(
         StandardScaler(),
-        LocalOutlierFactor(n_neighbors=20, novelty=True, contamination=CONTAMINATION),
+        LocalOutlierFactor(n_neighbors=n_neighbors, novelty=True, contamination=CONTAMINATION),
     )
     model.fit(normal[FEATURE_NAMES])
     return model

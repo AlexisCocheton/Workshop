@@ -15,7 +15,10 @@ FEATURES = {
     "req_rate": ("prometheus", 'sum(rate(http_requests_total[30s]))'),
     "err_4xx_rate": ("prometheus", 'sum(rate(http_requests_total{status=~"4.."}[30s]))'),
     "err_5xx_rate": ("prometheus", 'sum(rate(http_requests_total{status=~"5.."}[30s]))'),
-    "latency_p95": ("prometheus", 'histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[30s])))'),
+    # latency_p95 retirée : sur un PC Hôte saturé (toute la stack + Ollama), la
+    # latence au repos (~0,2 s) dépasse de loin celle de l'entraînement et
+    # provoque des faux positifs. À réactiver sur une machine moins chargée :
+    # "latency_p95": ("prometheus", 'histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[30s])))'),
     # CPU de l'API : on lit process_cpu_seconds_total{job="api"}, exposé par
     # l'API elle-même (prometheus_client), plutôt que cAdvisor dont le label
     # `name` est absent sur Docker Desktop/WSL2.
