@@ -31,3 +31,7 @@ dev/frontend/dist/
 
 # --- Divers ---
 .DS_Store
+
+# Dossier : on versionne le .md source, pas le rendu
+Dossier.html
+Dossier.pdf
