@@ -1,0 +1,5 @@
+# Fins de ligne cohérentes entre coéquipiers (Windows / Linux / conteneurs).
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
