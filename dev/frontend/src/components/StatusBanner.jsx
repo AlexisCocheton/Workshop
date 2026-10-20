@@ -1,3 +1,4 @@
+import { MASCOT } from "../funMode.js";
 import { FEATURE_LABELS, lastIncident, phaseOf, secondsSince } from "../status.js";
 
 // Bandeau principal, lisible à distance (démo, Clip Chrono).
@@ -55,23 +56,30 @@ function causeOf(status) {
   return null;
 }
 
-export default function StatusBanner({ status, events }) {
+export default function StatusBanner({ status, events, fun }) {
   const phase = phaseOf(status, events);
   const { tone, icon, title } = PHASES[phase];
   const cause = ["incident", "degraded", "recovering"].includes(phase) ? causeOf(status) : null;
+  const mascot = fun ? MASCOT[phase] : null; // mode licorne : le chaton commente l'état
 
   return (
-    <section aria-live="polite" className={`flex items-center gap-5 rounded-xl border-l-8 p-5 shadow-sm ${BANNER_TONES[tone]}`}>
-      <span
-        aria-hidden="true"
-        className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-2xl font-bold ${ICON_TONES[tone]}`}
-      >
-        {icon}
-      </span>
-      <div>
-        <p className="text-2xl font-bold sm:text-3xl">{title}</p>
-        <p className="mt-1 text-epsi-ink/80">{describe(phase, status, events)}</p>
-        {cause && <p className="mt-1 text-sm font-semibold">Cause : {cause}</p>}
+    // Fond blanc sous la teinte : le décor du mode licorne ne transparaît pas.
+    <section aria-live="polite" className="rounded-xl bg-white shadow-sm">
+      <div className={`flex items-center gap-5 rounded-xl border-l-8 p-5 ${BANNER_TONES[tone]}`}>
+        <span
+          aria-hidden="true"
+          className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full font-bold ${
+            mascot ? "text-4xl" : "text-2xl"
+          } ${ICON_TONES[tone]}`}
+        >
+          {mascot ? mascot.icon : icon}
+        </span>
+        <div>
+          <p className="text-2xl font-bold sm:text-3xl">{title}</p>
+          <p className="mt-1 text-epsi-ink/80">{describe(phase, status, events)}</p>
+          {cause && <p className="mt-1 text-sm font-semibold">Cause : {cause}</p>}
+          {mascot && <p className="mt-2 text-sm italic text-epsi-ink/70">« {mascot.says} »</p>}
+        </div>
       </div>
     </section>
   );

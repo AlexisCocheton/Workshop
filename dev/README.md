@@ -24,6 +24,11 @@ Conçu pour rendre l'incident lisible **avant, pendant et après**, y compris à
 | `RemediationLog` | Journal des actions du moteur de remédiation |
 | `PaymentPanel` | Transaction de test et dernières transactions (preuve de reprise) |
 | `Assistant` | Questions à l'assistant RAG (lecture seule) |
+| `Friends` | Mode licorne 🦄 : chaton mascotte, décor flottant, licorne qui traverse l'écran à la reprise |
+
+Le **mode licorne** est activé par défaut et se coupe d'un clic (bouton en haut à droite),
+par exemple pour une présentation sérieuse. Le choix est mémorisé dans le navigateur, et les
+animations s'arrêtent si le système demande de réduire les mouvements.
 
 Les adresses des services se règlent par variables `VITE_*` (fichier `frontend/.env`, non versionné) ;
 les valeurs par défaut correspondent aux ports du `compose.yml`.

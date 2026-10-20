@@ -1,3 +1,30 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Mode licorne : animations douces, coupées si le système demande moins d'animations. */
+@keyframes bob {
+  from { transform: translateY(0) rotate(-6deg); }
+  to { transform: translateY(-14px) rotate(6deg); }
+}
+
+/* La licorne regarde vers la gauche : elle traverse de droite à gauche. */
+@keyframes gallop {
+  from { transform: translateX(110vw); }
+  to { transform: translateX(-60vw); }
+}
+
+.friend {
+  animation: bob ease-in-out infinite alternate;
+}
+
+.gallop {
+  animation: gallop 4s ease-in-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .friend,
+  .gallop {
+    animation: none;
+  }
+}

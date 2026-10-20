@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { fetchEvents, fetchStatus, fetchTransactions } from "./api.js";
-import { formatClock } from "./status.js";
+import { useFunMode } from "./funMode.js";
+import { formatClock, phaseOf } from "./status.js";
 import Assistant from "./components/Assistant.jsx";
 import Features from "./components/Features.jsx";
+import { FloatingFriends, UnicornParade } from "./components/Friends.jsx";
 import PaymentPanel from "./components/PaymentPanel.jsx";
 import RemediationLog from "./components/RemediationLog.jsx";
 import ServiceCards from "./components/ServiceCards.jsx";
@@ -17,6 +19,7 @@ export default function App() {
   const [transactions, setTransactions] = useState([]);
   const [history, setHistory] = useState([]);
   const [updatedAt, setUpdatedAt] = useState(null);
+  const [fun, setFun] = useFunMode();
 
   // Toutes les 2 s : état du détecteur (avec historique) et journal de remédiation.
   useEffect(() => {
@@ -54,23 +57,36 @@ export default function App() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-epsi-bg text-epsi-ink">
-      <div className="mx-auto max-w-6xl space-y-5 px-4 py-6">
+    <div className="relative min-h-screen bg-epsi-bg text-epsi-ink">
+      {fun && <FloatingFriends />}
+      {fun && <UnicornParade phase={phaseOf(status, events)} />}
+
+      <div className="relative z-10 mx-auto max-w-6xl space-y-5 px-4 py-6">
         <header className="flex flex-wrap items-end justify-between gap-2">
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-epsi-ink/60">Project Resilience-Alpha</p>
             <h1 className="text-2xl font-bold sm:text-3xl">Supervision de la plateforme de paiement</h1>
           </div>
-          <p className="flex items-center gap-2 text-sm text-epsi-ink/70">
-            <span className="relative flex h-2.5 w-2.5" aria-hidden="true">
-              <span className="absolute h-full w-full rounded-full bg-status-good opacity-60 motion-safe:animate-ping" />
-              <span className="relative h-2.5 w-2.5 rounded-full bg-status-good" />
-            </span>
-            En direct{updatedAt && ` · mis à jour à ${formatClock(updatedAt)}`}
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              aria-pressed={fun}
+              onClick={() => setFun(!fun)}
+              className="rounded-full bg-white px-3 py-1 text-sm shadow-sm ring-1 ring-epsi-ink/10 hover:bg-epsi-accent/30"
+            >
+              🦄 Mode licorne : {fun ? "activé" : "désactivé"}
+            </button>
+            <p className="flex items-center gap-2 text-sm text-epsi-ink/70">
+              <span className="relative flex h-2.5 w-2.5" aria-hidden="true">
+                <span className="absolute h-full w-full rounded-full bg-status-good opacity-60 motion-safe:animate-ping" />
+                <span className="relative h-2.5 w-2.5 rounded-full bg-status-good" />
+              </span>
+              En direct{updatedAt && ` · mis à jour à ${formatClock(updatedAt)}`}
+            </p>
+          </div>
         </header>
 
-        <StatusBanner status={status} events={events} />
+        <StatusBanner status={status} events={events} fun={fun} />
         <ServiceCards status={status} events={events} />
         <Timeline history={history} events={events} />
 
