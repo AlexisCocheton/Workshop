@@ -13,6 +13,7 @@ Workshop EPSI M2 2026-27. Données entièrement fictives, aucune donnée réelle
 | **IA / Data** | [`ai/`](ai/) | Détection d'anomalies par ML + assistant RAG local (Ollama/LangChain) |
 | **Cybersécurité** | [`cyber/`](cyber/) | Attaque Red Team, WAF, SIEM, durcissement, secrets SOPS |
 | **Gouvernance** | [`gouvernance/`](gouvernance/) | EBIOS RM, PCA/PRA, NIS2/DORA, recommandations |
+| Objet connecté | [`iot/`](iot/) | ESP8266 + LED bicolore : témoin de connexion au back-office (CLion + PlatformIO) |
 
 ## Le scénario démontré
 
@@ -86,4 +87,5 @@ infra/               observabilité + Ansible
 ai/                  détecteur ML + assistant RAG  (tests : cd ai && pytest)
 cyber/               attaque + WAF + secrets + durcissement
 gouvernance/         EBIOS, PCA/PRA, NIS2/DORA
+iot/                 ESP8266 + LED bicolore, témoin du back-office (PlatformIO)
 ```

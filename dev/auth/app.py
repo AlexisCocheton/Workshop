@@ -11,6 +11,8 @@ Deux comptes, deux usages :
 
 Échecs : visage non reconnu = 30 s d'attente avant de ressaisir l'identifiant ;
 au 2e échec (visage ou mot de passe), le compte est bloqué 5 minutes.
+
+Témoin LED : GET /led donne à l'ESP8266 (dossier iot/) l'état de sa LED bicolore.
 Aucune donnée réelle.
 """
 import hmac
@@ -22,6 +24,7 @@ import httpx
 import jwt
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 # Secret JWT obligatoire (partagé avec l'API qui vérifie les jetons).
@@ -55,6 +58,20 @@ app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_methods=
 # Échecs par identifiant, en mémoire (remis à zéro si le service redémarre).
 failures: dict[str, int] = {}
 blocked_until: dict[str, float] = {}
+
+# Témoin LED : le dernier événement de connexion décide de l'affichage, pendant une durée
+# fixée par la consigne (indépendante des attentes réglables ci-dessus, pour rester visible en test).
+LED_RULES = {  # événement -> (mode de la LED, durée d'affichage en secondes)
+    "face_ok": ("green_blink", FACE_TICKET_SECONDS),  # jusqu'à la saisie du mot de passe
+    "login_ok": ("green", 30),
+    "password_bad": ("red_blink", 6),  # l'ESP fait exactement 10 clignotements (5 s)
+    "face_bad": ("red", 30),
+}
+led = {"event": None, "at": 0.0, "id": 0}  # id : numéro d'événement, pour que l'ESP voie un nouvel échec
+
+
+def set_led(event: str):
+    led.update(event=event, at=time.time(), id=led["id"] + 1)
 
 
 class Credentials(BaseModel):
@@ -116,8 +133,10 @@ def backoffice_face(body: FaceRequest):
         raise HTTPException(503, "Reconnaissance faciale indisponible (service face lancé sur le PC Hôte ?).")
     result = response.json()
     if not result["recognized"]:
+        set_led("face_bad")
         wait = record_failure(body.username, FACE_RETRY_SECONDS)
         return {"recognized": False, "reason": result["reason"], "retry_in": wait}
+    set_led("face_ok")
     return {"recognized": True, "face_ticket": make_token(body.username, "face", FACE_TICKET_SECONDS)}
 
 
@@ -136,10 +155,25 @@ def backoffice_login(body: BackofficeCredentials):
     # compare_digest : temps de comparaison constant, ne laisse pas deviner le mot de passe
     password_ok = hmac.compare_digest(body.password.encode(), BACKOFFICE_PASSWORD.encode())
     if body.user != BACKOFFICE_USER or not password_ok:
+        set_led("password_bad")
         record_failure(body.user)
         raise HTTPException(401, "Mot de passe incorrect : recommencez l'identification.")
     failures.pop(body.user, None)
+    set_led("login_ok")
     return {"token": make_token(body.user, "backoffice", 8 * 3600)}
+
+
+@app.get("/led", response_class=PlainTextResponse)
+def led_state():
+    """État de la LED pour l'ESP8266 : « <mode> <numéro d'événement> », ex. « red_blink 12 ».
+
+    Lisible sans authentification : c'est l'information que la LED affiche à toute
+    la salle, et cette route ne permet aucune action.
+    """
+    mode, seconds = LED_RULES.get(led["event"], ("off", 0))
+    if time.time() - led["at"] > seconds:
+        mode = "off"
+    return f"{mode} {led['id']}"
 
 
 @app.get("/healthz")

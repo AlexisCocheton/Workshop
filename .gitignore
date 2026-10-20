@@ -23,6 +23,13 @@ ai/data/face_encodings/
 **/*.pyc
 **/.pytest_cache/
 
+# --- IoT (ESP8266, PlatformIO + CLion) ---
+iot/include/secrets.h
+iot/.pio/
+iot/.idea/
+iot/cmake-build-*/
+iot/CMakeListsPrivate.txt
+
 # --- Node ---
 dev/frontend/node_modules/
 dev/frontend/dist/
