@@ -1,112 +1,88 @@
 import { useEffect, useState } from "react";
+import { fetchEvents, fetchStatus, fetchTransactions } from "./api.js";
+import { formatClock } from "./status.js";
+import Assistant from "./components/Assistant.jsx";
+import Features from "./components/Features.jsx";
+import PaymentPanel from "./components/PaymentPanel.jsx";
+import RemediationLog from "./components/RemediationLog.jsx";
+import ServiceCards from "./components/ServiceCards.jsx";
+import StatusBanner from "./components/StatusBanner.jsx";
+import Timeline from "./components/Timeline.jsx";
 
-// Le navigateur passe par le WAF pour l'API, et joint directement les services
-// de supervision publiés sur l'hôte. Les URLs sont configurables (variables
-// VITE_*) pour s'adapter aux ports réels de la machine ; valeurs par défaut =
-// ports du compose.yml.
-const WAF = import.meta.env.VITE_WAF_URL || "http://localhost:8080";
-const DETECTOR = import.meta.env.VITE_DETECTOR_URL || "http://localhost:8000";
-const REMEDIATION = import.meta.env.VITE_REMEDIATION_URL || "http://localhost:8200";
-
-const COLORS = {
-  normal: "bg-green-100 text-green-800",
-  anomaly: "bg-red-100 text-red-800",
-  unknown: "bg-yellow-100 text-yellow-800",
-  no_model: "bg-gray-200 text-gray-700",
-  starting: "bg-gray-200 text-gray-700",
-};
-
-async function getJson(url, options) {
-  const response = await fetch(url, options);
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
-}
+const WINDOW_MS = 5 * 60 * 1000; // historique gardé pour le graphique : 5 minutes
 
 export default function App() {
-  const [status, setStatus] = useState({ state: "starting" });
+  const [status, setStatus] = useState(null);
   const [events, setEvents] = useState([]);
-  const [result, setResult] = useState("");
+  const [transactions, setTransactions] = useState([]);
+  const [history, setHistory] = useState([]);
+  const [updatedAt, setUpdatedAt] = useState(null);
 
-  // Rafraîchit l'état du détecteur et l'historique de remédiation toutes les 2 s.
+  // Toutes les 2 s : état du détecteur (avec historique) et journal de remédiation.
   useEffect(() => {
-    const refresh = async () => {
-      try { setStatus(await getJson(`${DETECTOR}/status`)); } catch { setStatus({ state: "unknown" }); }
-      try { setEvents(await getJson(`${REMEDIATION}/events`)); } catch { setEvents([]); }
-    };
+    async function refresh() {
+      try {
+        const current = await fetchStatus();
+        const now = Date.now();
+        setStatus(current);
+        setUpdatedAt(now);
+        setHistory((h) =>
+          [...h, { t: now, score: current.score, state: current.state, apiHealthy: current.api_healthy }].filter(
+            (p) => p.t > now - WINDOW_MS,
+          ),
+        );
+      } catch {
+        setStatus({ state: "unknown", error: "Le détecteur ne répond pas." });
+      }
+      try {
+        setEvents(await fetchEvents());
+      } catch {
+        // Remédiation injoignable : on garde le dernier journal connu.
+      }
+    }
     refresh();
     const timer = setInterval(refresh, 2000);
     return () => clearInterval(timer);
   }, []);
 
-  // Démontre que le service de paiement fonctionne : login puis transaction.
-  const runTransaction = async () => {
-    setResult("…");
-    try {
-      const { token } = await getJson(`${WAF}/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user: "app", password: "app" }),
-      });
-      const tx = await getJson(`${WAF}/transactions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ amount: 42.5, currency: "EUR" }),
-      });
-      setResult(`Transaction ${tx.status} (id ${tx.id.slice(0, 8)}…)`);
-    } catch (error) {
-      setResult(`Échec : ${error.message}`);
-    }
-  };
-
-  const badge = COLORS[status.state] || COLORS.unknown;
+  // Toutes les 5 s : dernières transactions (preuve que le paiement fonctionne).
+  const refreshTransactions = () => fetchTransactions().then(setTransactions).catch(() => {});
+  useEffect(() => {
+    refreshTransactions();
+    const timer = setInterval(refreshTransactions, 5000);
+    return () => clearInterval(timer);
+  }, []);
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 text-slate-800">
-      <div className="mx-auto max-w-3xl space-y-6">
-        <h1 className="text-2xl font-bold">RESILIENCE-ALPHA — Supervision</h1>
-
-        <section className="rounded-lg bg-white p-5 shadow">
-          <h2 className="mb-3 font-semibold">État du détecteur d'anomalies</h2>
-          <span className={`rounded px-3 py-1 text-sm font-medium ${badge}`}>{status.state}</span>
-          {status.score != null && <span className="ml-3 text-sm">score : {status.score}</span>}
-          {status.api_healthy != null && (
-            <span className="ml-3 text-sm">
-              API : {status.api_healthy ? "✅ en ligne" : "❌ injoignable"}
+    <div className="min-h-screen bg-epsi-bg text-epsi-ink">
+      <div className="mx-auto max-w-6xl space-y-5 px-4 py-6">
+        <header className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-epsi-ink/60">Project Resilience-Alpha</p>
+            <h1 className="text-2xl font-bold sm:text-3xl">Supervision de la plateforme de paiement</h1>
+          </div>
+          <p className="flex items-center gap-2 text-sm text-epsi-ink/70">
+            <span className="relative flex h-2.5 w-2.5" aria-hidden="true">
+              <span className="absolute h-full w-full rounded-full bg-status-good opacity-60 motion-safe:animate-ping" />
+              <span className="relative h-2.5 w-2.5 rounded-full bg-status-good" />
             </span>
-          )}
-          {status.top_features?.length > 0 && (
-            <ul className="mt-3 text-sm text-slate-600">
-              {status.top_features.map((feature) => (
-                <li key={feature.name}>
-                  {feature.name} = {Number(feature.value).toFixed(2)} (z = {feature.zscore})
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+            En direct{updatedAt && ` · mis à jour à ${formatClock(updatedAt)}`}
+          </p>
+        </header>
 
-        <section className="rounded-lg bg-white p-5 shadow">
-          <h2 className="mb-3 font-semibold">Service de paiement</h2>
-          <button onClick={runTransaction} className="rounded bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700">
-            Lancer une transaction fictive
-          </button>
-          {result && <p className="mt-3 text-sm">{result}</p>}
-        </section>
+        <StatusBanner status={status} events={events} />
+        <ServiceCards status={status} events={events} />
+        <Timeline history={history} events={events} />
 
-        <section className="rounded-lg bg-white p-5 shadow">
-          <h2 className="mb-3 font-semibold">Remédiation automatique</h2>
-          {events.length === 0 ? (
-            <p className="text-sm text-slate-500">Aucune action pour l'instant.</p>
-          ) : (
-            <ul className="space-y-1 text-sm">
-              {events.map((event, index) => (
-                <li key={index} className="text-slate-600">
-                  <span className="text-slate-400">{event.at.slice(11, 19)}</span> — {event.action}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+        <div className="grid gap-5 lg:grid-cols-2">
+          <Features status={status} />
+          <RemediationLog events={events} />
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-2">
+          <PaymentPanel transactions={transactions} onPaid={refreshTransactions} />
+          <Assistant />
+        </div>
       </div>
     </div>
   );

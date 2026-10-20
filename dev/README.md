@@ -8,7 +8,25 @@ Les microservices métier et le moteur de reprise.
 | `auth` | 8100 | Émet un jeton JWT (`POST /login`) |
 | `api` | 8000 | API de paiement : `POST /transactions` (jeton requis), `GET /transactions`, `/metrics`, `/healthz` |
 | `remediation` | 8200 | Reçoit l'alerte du détecteur (`POST /incident`) et redémarre `api` ; `GET /events` |
-| `frontend` | 3000 | Dashboard React + Tailwind : état du détecteur, transaction de test, historique de remédiation |
+| `frontend` | 3000 | Dashboard React + Tailwind (voir ci-dessous) |
+
+## Le dashboard (`frontend/`)
+
+Conçu pour rendre l'incident lisible **avant, pendant et après**, y compris à distance
+(démo, Clip Chrono), aux couleurs de la charte EPSI. Un composant par bloc dans `src/components/` :
+
+| Bloc | Rôle |
+|---|---|
+| `StatusBanner` | Phase en grand : opérationnel → dégradation → incident → reprise → rétabli (avec durée) |
+| `ServiceCards` | État de l'API, du détecteur IA, de la remédiation et du WAF |
+| `Timeline` | Score sur 5 min, seuil, bandes d'incident, repères de remédiation, frise de disponibilité, réticule et vue tableau |
+| `Features` | Pourquoi l'alerte : indicateurs les plus inhabituels (z-score) |
+| `RemediationLog` | Journal des actions du moteur de remédiation |
+| `PaymentPanel` | Transaction de test et dernières transactions (preuve de reprise) |
+| `Assistant` | Questions à l'assistant RAG (lecture seule) |
+
+Les adresses des services se règlent par variables `VITE_*` (fichier `frontend/.env`, non versionné) ;
+les valeurs par défaut correspondent aux ports du `compose.yml`.
 
 ## La faille de démonstration
 
