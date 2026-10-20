@@ -1,10 +1,14 @@
 // Appels aux services de la plateforme.
-// Adresses configurables par variables VITE_* (fichier .env du frontend) pour
-// s'adapter aux ports réels de la machine ; valeurs par défaut = compose.yml.
-export const WAF = import.meta.env.VITE_WAF_URL || "http://localhost:8080";
-export const DETECTOR = import.meta.env.VITE_DETECTOR_URL || "http://localhost:8000";
-export const REMEDIATION = import.meta.env.VITE_REMEDIATION_URL || "http://localhost:8200";
-export const ASSISTANT = import.meta.env.VITE_ASSISTANT_URL || "http://localhost:8001";
+// Par défaut, on joint les services sur la même adresse que celle qui a servi
+// le dashboard (ouvrir http://127.0.0.1:3000 sur le PC Hôte). On évite
+// "localhost" en dur : sous Windows + Docker Desktop, il peut partir en IPv6
+// vers le relais WSL et rester bloqué indéfiniment (constaté).
+// Adresses surchargeables par variables VITE_* (fichier .env du frontend).
+const HOST = window.location.hostname;
+export const WAF = import.meta.env.VITE_WAF_URL || `http://${HOST}:8080`;
+export const DETECTOR = import.meta.env.VITE_DETECTOR_URL || `http://${HOST}:8000`;
+export const REMEDIATION = import.meta.env.VITE_REMEDIATION_URL || `http://${HOST}:8200`;
+export const ASSISTANT = import.meta.env.VITE_ASSISTANT_URL || `http://${HOST}:8001`;
 
 // Compte de démonstration public (voir .env.example) : il ne peut que créer
 // des transactions fictives.

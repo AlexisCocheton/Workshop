@@ -22,7 +22,7 @@ if not TOKEN:
 TARGET_CONTAINER = os.getenv("TARGET_CONTAINER", "api")
 
 # Origines autorisées pour le dashboard (CORS), au lieu de tout ouvrir.
-ALLOWED_ORIGINS = os.getenv("DASHBOARD_ORIGINS", "http://localhost:3000").split(",")
+ALLOWED_ORIGINS = os.getenv("DASHBOARD_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
 
 app = FastAPI(title="Moteur de remédiation")
 app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_methods=["*"], allow_headers=["*"])

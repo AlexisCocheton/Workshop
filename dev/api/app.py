@@ -30,7 +30,7 @@ if not JWT_SECRET:
 DB_DSN = os.getenv("DB_DSN", "postgresql://app:app@db:5432/payments")
 
 # Origines autorisées pour le dashboard (CORS), au lieu de tout ouvrir.
-ALLOWED_ORIGINS = os.getenv("DASHBOARD_ORIGINS", "http://localhost:3000").split(",")
+ALLOWED_ORIGINS = os.getenv("DASHBOARD_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
 
 # Métriques exposées sur /metrics. Les noms correspondent à ce que lit le
 # détecteur IA (ai/detector/features.py) : ne pas les renommer sans prévenir.

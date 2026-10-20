@@ -20,7 +20,7 @@ DEMO_USER = os.getenv("DEMO_USER", "app")
 DEMO_PASSWORD = os.getenv("DEMO_PASSWORD", "app")
 
 # Origines autorisées pour le dashboard (CORS).
-ALLOWED_ORIGINS = os.getenv("DASHBOARD_ORIGINS", "http://localhost:3000").split(",")
+ALLOWED_ORIGINS = os.getenv("DASHBOARD_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
 
 app = FastAPI(title="Service d'authentification")
 app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_methods=["*"], allow_headers=["*"])

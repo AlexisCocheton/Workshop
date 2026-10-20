@@ -38,4 +38,4 @@ TOP_K = int(os.getenv("TOP_K", "5"))  # nombre de passages de documentation envo
 
 # --- Dashboard ---
 # Origines autorisées pour les appels du dashboard (CORS), au lieu de tout ouvrir.
-DASHBOARD_ORIGINS = os.getenv("DASHBOARD_ORIGINS", "http://localhost:3000").split(",")
+DASHBOARD_ORIGINS = os.getenv("DASHBOARD_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")

@@ -30,7 +30,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:?définir JWT_SECRET dans .env}
       DEMO_USER: ${DEMO_USER:-app}
       DEMO_PASSWORD: ${DEMO_PASSWORD:-app}
-      DASHBOARD_ORIGINS: ${DASHBOARD_ORIGINS:-http://localhost:3000}
+      DASHBOARD_ORIGINS: ${DASHBOARD_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
 
   api:
     build: ./dev/api
@@ -38,7 +38,7 @@ services:
     environment:
       JWT_SECRET: ${JWT_SECRET:?définir JWT_SECRET dans .env}
       DB_DSN: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:?définir POSTGRES_PASSWORD dans .env}@db:5432/${POSTGRES_DB:-payments}
-      DASHBOARD_ORIGINS: ${DASHBOARD_ORIGINS:-http://localhost:3000}
+      DASHBOARD_ORIGINS: ${DASHBOARD_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
     depends_on:
       - db
 
@@ -48,7 +48,7 @@ services:
     environment:
       REMEDIATION_TOKEN: ${REMEDIATION_TOKEN:?définir REMEDIATION_TOKEN dans .env}
       TARGET_CONTAINER: api
-      DASHBOARD_ORIGINS: ${DASHBOARD_ORIGINS:-http://localhost:3000}
+      DASHBOARD_ORIGINS: ${DASHBOARD_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock  # seul service avec accès Docker
     ports:

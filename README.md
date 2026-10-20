@@ -26,8 +26,12 @@ Workshop EPSI M2 2026-27. Données entièrement fictives, aucune donnée réelle
 5. PREUVE      Une nouvelle transaction fictive réussit. Zéro intervention humaine.
 ```
 
-Le tout est visible sur le dashboard (http://localhost:3000) et dans Grafana
-(http://localhost:3001) : état du service avant, pendant et après l'incident.
+Le tout est visible sur le dashboard (http://127.0.0.1:3000) et dans Grafana
+(http://127.0.0.1:3001) : état du service avant, pendant et après l'incident.
+
+> **Ouvrir via `127.0.0.1`, pas `localhost`.** Sous Windows + Docker Desktop, le navigateur
+> peut résoudre `localhost` en IPv6 vers le relais WSL (`wslrelay`), qui accepte la connexion
+> sans jamais répondre : la page charge à l'infini. Constaté sur notre poste.
 
 ## Démarrer la plateforme (PC Hôte)
 
