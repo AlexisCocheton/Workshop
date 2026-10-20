@@ -38,5 +38,15 @@ export async function payDemo() {
   });
 }
 
+// Back-office : connexion en deux étapes (visage puis mot de passe), via le WAF.
+// On renvoie aussi le code HTTP : un refus (401, 429, 503) porte un message à afficher.
+async function postAuth(path, body) {
+  const response = await fetch(`${WAF}/auth${path}`, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(body) });
+  return { ok: response.ok, ...(await response.json()) };
+}
+export const checkFace = (username) => postAuth("/backoffice/face", { username });
+export const backofficeLogin = (user, password, faceTicket) =>
+  postAuth("/backoffice/login", { user, password, face_ticket: faceTicket });
+
 export const askAssistant = (question) =>
   getJson(`${ASSISTANT}/ask`, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ question }) });

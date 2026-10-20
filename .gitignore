@@ -14,6 +14,8 @@ ai/data/*.csv
 ai/data/*.joblib
 # on garde ai/data/report.json comme preuve de résultats
 !ai/data/report.json
+# Visages enregistrés : donnée biométrique (RGPD art. 9), jamais versionnée
+ai/data/face_encodings/
 
 # --- Python ---
 **/.venv/

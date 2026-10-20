@@ -52,6 +52,11 @@ docker compose exec ollama ollama pull nomic-embed-text
 Entraîner le détecteur sur le trafic normal : voir [`ai/README.md`](ai/README.md),
 section « Entraîner le détecteur ».
 
+Le dashboard (back-office) demande une connexion avec **reconnaissance faciale** : le service
+`face` doit tourner sur le PC Hôte, où est branchée la caméra USB, et `BACKOFFICE_PASSWORD`
+doit être défini dans `.env`. Voir [`ai/README.md`](ai/README.md), section « Reconnaissance
+faciale du back-office ».
+
 ## Jouer la démonstration
 
 ```powershell

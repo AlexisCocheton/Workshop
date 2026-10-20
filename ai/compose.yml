@@ -37,5 +37,8 @@ services:
     volumes:
       - ollama:/root/.ollama  # modèles téléchargés, conservés entre deux redémarrages
 
+  # Pas de service « face » ici : la reconnaissance faciale tourne sur le PC Hôte,
+  # car Docker Desktop (WSL2) n'a pas accès à la caméra USB. Voir README.
+
 volumes:
   ollama:

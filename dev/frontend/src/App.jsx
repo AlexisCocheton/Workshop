@@ -5,6 +5,7 @@ import { formatClock, phaseOf } from "./status.js";
 import Assistant from "./components/Assistant.jsx";
 import Features from "./components/Features.jsx";
 import { FloatingFriends, UnicornParade } from "./components/Friends.jsx";
+import Login from "./components/Login.jsx";
 import PaymentPanel from "./components/PaymentPanel.jsx";
 import RemediationLog from "./components/RemediationLog.jsx";
 import ServiceCards from "./components/ServiceCards.jsx";
@@ -14,6 +15,16 @@ import Timeline from "./components/Timeline.jsx";
 const WINDOW_MS = 5 * 60 * 1000; // historique gardé pour le graphique : 5 minutes
 
 export default function App() {
+  const [token, setToken] = useState(() => sessionStorage.getItem("auth_token"));
+
+  if (!token) {
+    return <Login onLogin={(t) => { sessionStorage.setItem("auth_token", t); setToken(t); }} />;
+  }
+
+  return <Dashboard onLogout={() => { sessionStorage.removeItem("auth_token"); setToken(null); }} />;
+}
+
+function Dashboard({ onLogout }) {
   const [status, setStatus] = useState(null);
   const [events, setEvents] = useState([]);
   const [transactions, setTransactions] = useState([]);
@@ -75,6 +86,13 @@ export default function App() {
               className="rounded-full bg-white px-3 py-1 text-sm shadow-sm ring-1 ring-epsi-ink/10 hover:bg-epsi-accent/30"
             >
               🦄 Mode licorne : {fun ? "activé" : "désactivé"}
+            </button>
+            <button
+              type="button"
+              onClick={onLogout}
+              className="rounded-full border border-epsi-ink/20 px-3 py-1 text-sm text-epsi-ink/70 hover:bg-red-50 hover:text-red-600"
+            >
+              Déconnexion
             </button>
             <p className="flex items-center gap-2 text-sm text-epsi-ink/70">
               <span className="relative flex h-2.5 w-2.5" aria-hidden="true">

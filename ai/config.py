@@ -36,6 +36,17 @@ EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
 DETECTOR_URL = os.getenv("DETECTOR_URL", "http://detector:8000")
 TOP_K = int(os.getenv("TOP_K", "5"))  # nombre de passages de documentation envoyés au LLM
 
+# --- Reconnaissance faciale du back-office (service lancé sur le PC Hôte, où est la caméra) ---
+# Un visage enregistré = un vecteur de 128 nombres (jamais la photo). Donnée
+# biométrique : ce dossier n'est pas versionné.
+FACE_ENCODINGS_DIR = DATA_DIR / "face_encodings"
+CAMERA_INDEX = int(os.getenv("CAMERA_INDEX", "0"))
+# Distance maximale entre deux visages pour dire « même personne ». Mesuré sur
+# notre caméra : même personne 0,19 avec le guide de placement (0,33 à 0,45 sans),
+# autre personne 0,65.
+FACE_TOLERANCE = float(os.getenv("FACE_TOLERANCE", "0.5"))
+FACE_CAPTURE_SECONDS = float(os.getenv("FACE_CAPTURE_SECONDS", "15"))  # temps laissé pour bien placer son visage
+
 # --- Dashboard ---
 # Origines autorisées pour les appels du dashboard (CORS), au lieu de tout ouvrir.
 DASHBOARD_ORIGINS = os.getenv("DASHBOARD_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")

@@ -3,3 +3,5 @@ __pycache__
 .pytest_cache
 tests
 data
+# Reconnaissance faciale : lancée sur le PC Hôte, avec son propre venv (~0,5 Go)
+face

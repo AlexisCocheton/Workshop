@@ -30,7 +30,17 @@ services:
       JWT_SECRET: ${JWT_SECRET:?définir JWT_SECRET dans .env}
       DEMO_USER: ${DEMO_USER:-app}
       DEMO_PASSWORD: ${DEMO_PASSWORD:-app}
+      # Back-office : sans mot de passe dans .env, il reste fermé (les paiements, eux, fonctionnent).
+      BACKOFFICE_USER: ${BACKOFFICE_USER:-admin}
+      BACKOFFICE_PASSWORD: ${BACKOFFICE_PASSWORD:-}
+      # Attentes de la consigne après un échec (30 s, puis 5 min). 0 uniquement pour tester.
+      FACE_RETRY_SECONDS: ${FACE_RETRY_SECONDS:-30}
+      BLOCK_SECONDS: ${BLOCK_SECONDS:-300}
+      # Reconnaissance faciale : lancée sur le PC Hôte (caméra USB), hors Docker. Voir ai/README.md.
+      FACE_URL: ${FACE_URL:-http://host.docker.internal:8002}
       DASHBOARD_ORIGINS: ${DASHBOARD_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # déjà fourni par Docker Desktop ; nécessaire sous Linux
 
   api:
     build: ./dev/api

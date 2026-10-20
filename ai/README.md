@@ -109,6 +109,7 @@ Authorization: Bearer $REMEDIATION_TOKEN
 | `detector:8000/metrics` | Prometheus : `aiops_anomaly_score`, `aiops_anomaly` (0/1), pour Grafana |
 | `detector:8000/status` | Dashboard : état (`normal`, `anomaly`, `unknown`, `no_model`), score, features en cause |
 | `assistant:8001/ask` | Dashboard : `POST {"question": "..."}` → `{"answer", "sources"}` |
+| `127.0.0.1:8002/verify` (PC Hôte, hors Docker) | `auth` via `host.docker.internal` : `POST {"username": "..."}` → `{"recognized", "reason"}` |
 
 ## Sécurité
 
@@ -210,6 +211,96 @@ devient introuvable. Rédiger les docs de l'équipe avec des titres clairs et de
 - Le détecteur dit *qu'il y a* une anomalie et *sur quoi* ; le choix de l'action reste à la remédiation.
 - Les noms de métriques sont des hypothèses tant que Dev et Infra ne les ont pas confirmés.
 
+## Reconnaissance faciale du back-office (consigne additionnelle 1)
+
+La connexion au back-office (le dashboard) se fait en deux étapes : identifiant, puis la
+caméra USB du PC Hôte confirme le visage, puis mot de passe.
+
+```
+Dashboard ──> WAF ──> auth /backoffice/face ──> face /verify (PC Hôte : fenêtre caméra, 15 s max)
+                         │ reconnu : « ticket visage » signé, valable 2 min
+Dashboard ──> WAF ──> auth /backoffice/login (identifiant + mot de passe + ticket) ──> jeton back-office
+```
+
+| Cas | Ce qui se passe |
+|---|---|
+| Visage reconnu (un seul visage devant la caméra) | Le champ mot de passe s'affiche |
+| Visage non reconnu, ou plusieurs visages | Identifiant vidé, 30 s d'attente avant un nouvel essai |
+| Mot de passe faux | On recommence toute l'identification |
+| 2e échec (visage ou mot de passe) | Compte bloqué 5 minutes |
+
+Ces règles sont appliquées par `auth`, pas par la page : appeler l'API directement ne permet
+pas de sauter la caméra (vérifié : mot de passe juste sans ticket visage = refus 401).
+
+**Guide de placement** (`face/camera.py`). Une fenêtre caméra s'ouvre au premier plan sur l'écran
+du PC Hôte, en miroir, avec un ovale au centre : orange avec une consigne (« Rapprochez-vous »,
+« Reculez un peu », « Centrez votre visage », « Un seul visage SVP ») tant que le visage est mal
+placé, vert quand il l'est ; la photo est prise après 3 images bien placées d'affilée. Bien placé =
+le visage occupe 20 à 60 % de la largeur de l'image et son centre est proche du centre de l'image.
+Le même guide sert à l'enregistrement : le visage est cadré pareil aux deux moments, ce qui réduit
+la distance entre eux et donc les refus à tort (avant le guide, nous avions mesuré 0,45 pour un
+seuil de 0,5). L'aperçu reste sur le PC Hôte : l'image ne circule jamais sur le réseau.
+
+**Modèle.** `face_recognition` (bibliothèque dlib) : un réseau pré-entraîné transforme un visage
+en un vecteur de 128 nombres. Deux visages sont la même personne si la distance entre leurs
+vecteurs est ≤ 0,5 (`FACE_TOLERANCE`). Aucun entraînement de notre part : on enregistre un
+vecteur par opérateur. IA légère : CPU seul, ~100 Mo de modèles. Mesuré sur notre caméra :
+**même personne 0,19 avec le guide de placement** (0,33 à 0,45 sans), **autre personne 0,65**.
+
+**Pourquoi hors Docker.** Docker Desktop (WSL2) n'a pas accès aux webcams USB. Le service tourne
+donc sur le PC Hôte, n'écoute que sur `127.0.0.1` (injoignable depuis le réseau du groupe,
+vérifié), et `auth` le joint par `host.docker.internal`.
+
+### Installation (une fois, sur le PC Hôte)
+
+Prérequis : Python 3.12, CMake et Visual Studio Build Tools (C++), car dlib se compile.
+
+```powershell
+# depuis ai/
+py -3.12 -m venv face\.venv
+$env:PATH = "C:\Program Files\CMake\bin;" + $env:PATH
+face\.venv\Scripts\python -m pip install -r face\requirements.txt
+face\.venv\Scripts\python -m face.enroll --user admin    # photo prise quand l'ovale est vert
+```
+
+Puis ajouter `BACKOFFICE_PASSWORD=<mot de passe fort>` dans `.env` et `docker compose up -d auth`.
+Sans lui, le back-office reste fermé, mais les paiements fonctionnent quand même.
+
+### Avant chaque démo
+
+```powershell
+face\.venv\Scripts\python -m uvicorn face.service:app --host 127.0.0.1 --port 8002
+```
+
+Sans ce service, personne ne peut ouvrir le dashboard (« reconnaissance faciale indisponible »).
+
+Pour tester sans attendre entre deux essais :
+`$env:FACE_RETRY_SECONDS=0; $env:BLOCK_SECONDS=0; docker compose up -d auth`.
+Avant la démo, un simple `docker compose up -d auth` depuis un **nouveau** terminal remet
+les attentes de la consigne (30 s, puis 5 min).
+Tests sans caméra : `face\.venv\Scripts\python -m pytest tests/test_face.py`.
+
+### Sécurité et données
+
+- Aucun enregistrement de visage par HTTP, seulement `face.enroll` sur le PC Hôte : sinon un
+  conteneur compromis (l'API après l'exploit du callback) pourrait remplacer le visage de référence.
+- Seul le vecteur est stocké, jamais la photo. `data/face_encodings/` est exclu de Git
+  (donnée biométrique, RGPD art. 9).
+- Les jetons « visage » et « back-office » portent une audience (`aud`) : l'API de paiement
+  les refuse (vérifié), ils ne servent qu'à ce pour quoi ils ont été émis.
+- Le compte back-office (`BACKOFFICE_USER`, `admin` par défaut) est distinct du compte client
+  `app`, dont le mot de passe est public (il est dans le code du dashboard).
+
+### Limites
+
+- Pas de détection du vivant : une photo de l'opérateur montrée à la caméra peut passer.
+  Parade possible : demander un clignement d'yeux ou un mouvement de tête.
+- Les compteurs d'échecs sont en mémoire : ils repartent à zéro si `auth` redémarre.
+- Le jeton back-office ouvre l'interface, mais les API de supervision (détecteur, remédiation)
+  ne le vérifient pas : elles restent protégées par leur publication sur `127.0.0.1` seulement.
+- Un seul compte opérateur. La gestion des habilitations dans le back-office (ajouter ou retirer
+  un opérateur, des rôles) reste à faire.
+
 ## Fichiers
 
 | Fichier | Rôle |
@@ -222,5 +313,9 @@ devient introuvable. Rédiger les docs de l'équipe avec des titres clairs et de
 | `detector/service.py` | Détection en continu, `/status`, `/metrics`, webhook |
 | `assistant/rag.py` | Chaîne RAG : documents → passages → LLM |
 | `assistant/service.py` | API `/ask` |
+| `face/service.py` | Reconnaissance faciale du back-office : `/verify` (sur le PC Hôte) |
+| `face/camera.py` | Fenêtre caméra avec ovale-guide, commune à la vérification et à l'enregistrement |
+| `face/enroll.py` | Enregistre le visage d'un opérateur |
+| `face/requirements.txt` | Dépendances du venv séparé `face/.venv` (Python 3.12, dlib) |
 | `docs/` | Base de connaissance de l'assistant (procédures, architecture, PCA/PRA en `.md`) |
 | `tests/` | Tests sans réseau : `python -m pytest` |
