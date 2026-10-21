@@ -1,4 +1,27 @@
+import { useState } from "react";
 import { euros } from "../api.js";
+
+// Photo du produit (public/products/<id>.jpg). Sans photo (produit ajouté plus
+// tard), on retombe sur l'emoji stocké en base.
+function ProductImage({ product }) {
+  const [missing, setMissing] = useState(false);
+  if (missing) {
+    return (
+      <div aria-hidden="true" className="mb-3 grid h-40 place-items-center rounded-xl bg-candy-light text-5xl">
+        {product.emoji}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={`/products/${product.id}.jpg`}
+      alt={product.name}
+      loading="lazy"
+      onError={() => setMissing(true)}
+      className="mb-3 h-40 w-full rounded-xl bg-candy-light object-cover"
+    />
+  );
+}
 
 // Catalogue : une carte par confiserie, avec son stock et le bouton d'ajout au panier.
 export default function ProductGrid({ products, loadError, cart, onQuantity }) {
@@ -18,9 +41,7 @@ export default function ProductGrid({ products, loadError, cart, onQuantity }) {
         const soldOut = inCart >= product.stock;
         return (
           <article key={product.id} className="flex flex-col rounded-2xl bg-white p-5 shadow-sm">
-            <div aria-hidden="true" className="mb-3 grid h-24 place-items-center rounded-xl bg-candy-light text-5xl">
-              {product.emoji}
-            </div>
+            <ProductImage product={product} />
             <h2 className="font-bold">{product.name}</h2>
             <p className="mt-1 flex-1 text-sm text-candy-ink/70">{product.description}</p>
             <div className="mt-4 flex items-center justify-between">

@@ -4,6 +4,7 @@ import ProductGrid from "./components/ProductGrid.jsx";
 import Cart from "./components/Cart.jsx";
 import Orders from "./components/Orders.jsx";
 import { fetchProducts } from "./api.js";
+import { PHOTO_CREDITS } from "./credits.js";
 
 // Le panier et la session sont gardés dans le navigateur pour survivre à un
 // rechargement. Lecture/écriture protégées : en navigation privée, ça peut échouer.
@@ -84,6 +85,23 @@ export default function App() {
           </div>
         )}
       </main>
+      <footer className="mx-auto max-w-6xl px-4 pb-8 text-xs text-candy-ink/60">
+        <p>Boutique fictive (projet RESILIENCE-ALPHA) : aucun vrai paiement, aucune vraie donnée.</p>
+        <details className="mt-1">
+          <summary className="cursor-pointer">Crédits photos (Wikimedia Commons)</summary>
+          <ul className="mt-1 space-y-0.5">
+            {PHOTO_CREDITS.map((credit) => (
+              <li key={credit.product}>
+                {credit.product} :{" "}
+                <a href={credit.url} target="_blank" rel="noreferrer" className="underline">
+                  {credit.author}
+                </a>
+                , {credit.license}
+              </li>
+            ))}
+          </ul>
+        </details>
+      </footer>
     </div>
   );
 }

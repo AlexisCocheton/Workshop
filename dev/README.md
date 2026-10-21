@@ -35,6 +35,11 @@ ni au back-office. Le site ne recharge le catalogue qu'à l'ouverture et après 
 commande (pas de rafraîchissement périodique), pour ne pas fausser le trafic
 « normal » appris par le détecteur.
 
+Les photos des produits sont dans `shop/public/products/<id>.jpg` (sans photo,
+le site affiche l'emoji du produit). Elles viennent de Wikimedia Commons sous
+licence libre ; auteurs et licences sont dans `shop/src/credits.js` et affichés
+en bas de la boutique, comme l'exigent les licences CC BY / CC BY-SA.
+
 Pour ouvrir la boutique depuis un autre PC du réseau, ajouter son adresse
 (`http://<IP du PC Hôte>:3002`) à `SHOP_ORIGINS` dans `.env` (CORS).
 

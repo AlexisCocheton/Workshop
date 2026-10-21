@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS order_items (
 """
 
 # Catalogue de départ (fictif), inséré seulement si la table des produits est vide.
+# L'ordre fixe les id (1, 2, …), donc les photos dev/shop/public/products/<id>.jpg.
 PRODUCTS = [
     ("Fraises Tagada", "Guimauves roses à la fraise, sachet de 200 g.", 2.50, 120, "🍓"),
     ("Oursons guimauve", "Oursons enrobés de chocolat au lait, boîte de 10.", 4.90, 60, "🧸"),
