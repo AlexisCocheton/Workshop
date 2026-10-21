@@ -46,6 +46,8 @@ dev/frontend/dist/
 *.png
 # sauf les images utiles au dépôt (schémas, captures de doc) à ajouter explicitement
 !**/docs/**/*.png
+# photos des produits de la boutique (libres de droits, voir dev/shop/src/credits.js)
+!dev/shop/public/products/*.jpg
 
 # Dossier : on versionne le .md source, pas le rendu
 Dossier.html
