@@ -32,9 +32,7 @@ Un z-score de 8 signifie « très loin de l'habituel » ; un z-score de 1 est or
 | req_rate proche de 0 | Plus aucune requête n'aboutit : service tombé ou injoignable. |
 | err_4xx_rate haut | Beaucoup de requêtes refusées : brute force sur l'authentification, scan, ou injection bloquée. |
 | err_5xx_rate haut | L'API plante : service dégradé ou base de données indisponible. |
-| latency_p95 haut | L'API répond lentement : saturation. |
 | api_cpu haut | Le conteneur de l'API est saturé. |
-| waf_blocks haut | Le WAF bloque de nombreuses requêtes malveillantes (injection, scan). |
 
 ## Vérifier que le service est vraiment rétabli
 
