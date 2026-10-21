@@ -86,7 +86,11 @@ docker compose restart detector
 | `req_rate` | Prometheus, API métier | `http_requests_total` |
 | `err_4xx_rate`, `err_5xx_rate` | Prometheus, API métier | `http_requests_total{status=~"4.."}`, `{status=~"5.."}` |
 | `api_cpu` | Prometheus, API elle-même | `process_cpu_seconds_total{job="api"}` (cAdvisor n'expose pas le label `name` sur Docker Desktop) |
-| `waf_blocks` | Loki, logs du WAF | `{container="waf"} \|= "403"` |
+
+> `waf_blocks` a été retirée : le filtre Loki `|= "403"` comptait toute ligne de log contenant
+> « 403 » (403 applicatifs, nombres de champs…), pas les blocages du WAF, et faussait le modèle.
+> À réactiver quand le WAF émettra un marqueur de log propre (pôle Cyber). L'attaque applicative
+> reste vue par `err_4xx_rate`.
 
 **Ce que l'IA envoie** au moteur de remédiation, à chaque changement d'état :
 
@@ -172,7 +176,7 @@ Si les deux variables sont vides, l'alerte est simplement désactivée : le dét
 
 ## Pour le dossier technique (§3.3)
 
-**Données.** Six features mesurées toutes les 5 s (tableau ci-dessus). La collecte utilise
+**Données.** Quatre features mesurées toutes les 5 s (tableau ci-dessus). La collecte utilise
 la même fonction que le service en production (`fetch_now`) : le modèle est entraîné exactement
 sur ce qu'il voit en direct.
 

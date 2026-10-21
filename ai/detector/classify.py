@@ -46,7 +46,6 @@ def classify(top_features: list[dict], api_healthy: bool) -> dict:
     dominante = max(high, key=high.get)
     categories = {
         "err_4xx_rate": ("app_attack", "Beaucoup de requêtes refusées : scan, injection ou brute force probable."),
-        "waf_blocks": ("app_attack", "Beaucoup de requêtes bloquées par le WAF : scan ou injection probable."),
         "req_rate": ("dos", "Afflux massif de requêtes : déni de service probable."),
         "err_5xx_rate": ("service_error", "L'API renvoie des erreurs internes (5xx) : panne ou vulnérabilité exploitée."),
     }

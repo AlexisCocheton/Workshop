@@ -29,7 +29,7 @@ PROMPT = ChatPromptTemplate.from_messages([
 
 
 def load_docs(folder: Path = DOCS_DIR) -> list[Document]:
-    """Lit les .md et .txt du dossier et les découpe en passages d'environ 800 caractères."""
+    """Lit les .md et .txt du dossier et les découpe en passages d'environ 1500 caractères."""
     docs = [
         Document(page_content=path.read_text(encoding="utf-8"), metadata={"source": path.name})
         for path in sorted(folder.rglob("*"))

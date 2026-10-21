@@ -14,9 +14,8 @@ def test_api_down_prioritaire_meme_sans_feature():
 
 
 def test_scan_ou_injection_est_app_attack():
-    # Beaucoup de 4xx (requêtes refusées) ou de blocages WAF -> attaque applicative.
+    # Beaucoup de 4xx (requêtes refusées) -> attaque applicative (scan, brute force).
     assert classify(feats(err_4xx_rate=8.0), api_healthy=True)["category"] == "app_attack"
-    assert classify(feats(waf_blocks=6.0), api_healthy=True)["category"] == "app_attack"
 
 
 def test_afflux_de_requetes_est_dos():

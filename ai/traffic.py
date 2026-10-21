@@ -21,16 +21,24 @@ DEMO_PASSWORD = os.getenv("DEMO_PASSWORD", "app")
 
 
 def send_one(client: httpx.Client, target: str, token: str):
-    """Une action d'utilisateur : surtout des paiements et des consultations."""
+    """Une action d'utilisateur : paiements, consultations et navigation sur la boutique.
+
+    On mélange l'API de paiement et la boutique (/shop/*) car en démo le trafic
+    normal vient des deux : le modèle doit les avoir vus tous les deux, sinon il
+    prend une simple visite de la boutique pour une anomalie.
+    """
     draw = random.random()
     if draw < 0.03:
         # Erreur client ordinaire (jeton expiré) : un peu de 4xx fait partie du normal.
         client.post(f"{target}/transactions", json={"amount": 10}, headers={"Authorization": "Bearer expire"})
-    elif draw < 0.55:
+    elif draw < 0.35:
         amount = round(random.uniform(5, 500), 2)
         client.post(f"{target}/transactions", json={"amount": amount}, headers={"Authorization": f"Bearer {token}"})
-    else:
+    elif draw < 0.55:
         client.get(f"{target}/transactions")
+    else:
+        # Boutique : surtout de la consultation de produits, parfois une commande.
+        client.get(f"{target}/shop/products")
 
 
 def run_phase(client, target, token, seconds, start_rate, end_rate, deadline):
