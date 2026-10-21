@@ -40,6 +40,12 @@ dev/frontend/dist/
 
 # --- Divers ---
 .DS_Store
+# Photos de travail (consignes prises en photo, matériel) : non versionnées
+*.jpg
+*.jpeg
+*.png
+# sauf les images utiles au dépôt (schémas, captures de doc) à ajouter explicitement
+!**/docs/**/*.png
 
 # Dossier : on versionne le .md source, pas le rendu
 Dossier.html
