@@ -1,0 +1,62 @@
+{
+  "n_questions": 10,
+  "n_passages": 7,
+  "par_k": {
+    "1": {
+      "hybride": {
+        "bon_document": 1.0,
+        "terme_exact": 0.9
+      },
+      "vectoriel": {
+        "bon_document": 1.0,
+        "terme_exact": 0.8
+      },
+      "bm25": {
+        "bon_document": 1.0,
+        "terme_exact": 0.8
+      }
+    },
+    "2": {
+      "hybride": {
+        "bon_document": 1.0,
+        "terme_exact": 1.0
+      },
+      "vectoriel": {
+        "bon_document": 1.0,
+        "terme_exact": 1.0
+      },
+      "bm25": {
+        "bon_document": 1.0,
+        "terme_exact": 1.0
+      }
+    },
+    "3": {
+      "hybride": {
+        "bon_document": 1.0,
+        "terme_exact": 1.0
+      },
+      "vectoriel": {
+        "bon_document": 1.0,
+        "terme_exact": 1.0
+      },
+      "bm25": {
+        "bon_document": 1.0,
+        "terme_exact": 1.0
+      }
+    },
+    "5": {
+      "hybride": {
+        "bon_document": 1.0,
+        "terme_exact": 1.0
+      },
+      "vectoriel": {
+        "bon_document": 1.0,
+        "terme_exact": 1.0
+      },
+      "bm25": {
+        "bon_document": 1.0,
+        "terme_exact": 1.0
+      }
+    }
+  }
+}
