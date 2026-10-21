@@ -16,6 +16,13 @@ Mesures défensives appliquées à la plateforme, et pourquoi.
 - Images figées à une version précise (pas de `latest`) pour la reproductibilité.
 - `api` et `auth` tournent avec un utilisateur non-root.
 - La documentation du RAG et le `Caddyfile` sont montés en lecture seule (`:ro`).
+- **`no-new-privileges`** sur `api`, `auth` et le WAF : un process ne peut pas
+  élever ses privilèges (même via un binaire setuid).
+- **`cap_drop: ALL`** sur ces mêmes conteneurs : aucune capability Linux accordée
+  (ni réseau brut, ni montage, ni changement d'identité…). Ils n'en ont besoin d'aucune.
+- **Système de fichiers en lecture seule** (`read_only`) sur le WAF : un exploit ne
+  peut rien écrire sur le disque du conteneur (seuls `/tmp`, `/config`, `/data` sont
+  des volumes éphémères en RAM, où Caddy écrit son autosave).
 
 ## Privilèges et secrets
 
@@ -45,8 +52,16 @@ Le WAF (Caddy) est la seule porte d'entrée. Ce qu'il fait :
 - **Blocage des scanners** : requêtes d'outils d'attaque connus repérés à leur
   User-Agent (sqlmap, nikto, nmap, masscan) → 403.
 - **En-têtes de sécurité** sur chaque réponse : `X-Content-Type-Options: nosniff`,
-  `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, et suppression de la
-  bannière `Server` (ne renseigne pas l'attaquant sur la techno).
+  `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Content-Security-Policy`
+  (sources de contenu restreintes, anti-XSS), `Permissions-Policy` (caméra, micro,
+  géoloc coupés), et suppression de la bannière `Server`.
+- **Limite de taille du corps** (64 Ko) : un payload géant ne peut pas saturer l'API.
+- **Limite de débit sur l'authentification** (10 tentatives / 10 s par IP sur `/auth`
+  et `/shop/login`, via le module `caddy-ratelimit`) : freine le brute force de mots
+  de passe (429). Le reste du trafic (paiements, navigation, callback) n'est pas limité,
+  pour ne pas gêner la démo ni l'attaque.
+- **Détection SSRF** : les URL vers des cibles internes (127.x, localhost, et l'adresse
+  de métadonnées cloud `169.254.169.254`) sont bloquées (OWASP API7:2023).
 - **Journalisation exploitable** : l'access log est activé au niveau du site (il
   ne l'était pas avant, ce qui rendait les blocages invisibles). Chaque blocage
   porte un marqueur `waf_event: "WAF_BLOCK …"`, distinct des 403 applicatifs, que
