@@ -250,11 +250,27 @@ artificiellement les faux positifs (mesuré : 67 % en chronologique contre 0 % e
 
 ## Assistant RAG — vérifié en réel
 
-Testé le 2026-10-19 avec `qwen2.5:3b` + `nomic-embed-text` sur Ollama local : l'assistant
+Testé avec `qwen2.5:3b` + `nomic-embed-text` sur Ollama local : l'assistant
 répond en français à partir de `docs/`, cite sa source, et dit « je ne sais pas » hors périmètre.
 Les passages sont découpés en 1500 caractères (et non 800) pour qu'un **tableau Markdown** ne soit
 pas coupé entre son en-tête et ses lignes — sinon une ligne comme « err_5xx_rate → l'API plante »
 devient introuvable. Rédiger les docs de l'équipe avec des titres clairs et des tableaux courts.
+
+**Recherche hybride (BM25 + vectoriel).** Deux recherches tournent en parallèle sur les mêmes
+passages, puis leurs classements sont fusionnés par *Reciprocal Rank Fusion* :
+
+- **vectorielle** (embeddings) : trouve les passages au **sens** proche de la question ;
+- **BM25** (mots-clés) : trouve les **termes exacts** — un nom de feature (`err_5xx_rate`), une
+  catégorie d'incident (`app_attack`)… que la recherche vectorielle seule rate souvent.
+
+Chacune compense l'angle mort de l'autre. Implémenté simplement (bibliothèque `rank-bm25` + fusion
+maison, pas de grosse dépendance), testable sans Ollama (`tests/test_rag.py` : BM25 retrouve un
+identifiant exact, la fusion favorise un passage bien classé par les deux méthodes).
+
+> **Performance.** Les embeddings et la génération tournent sur Ollama **CPU**. Sur un PC Hôte
+> saturé (peu de RAM libre), la première réponse peut être lente (construction de l'index +
+> chargement du modèle). Pour la démo, précharger les modèles et, si besoin, déporter Ollama sur
+> le PC de délestage IA (`OLLAMA_URL`) : c'est l'option recommandée quand la RAM manque.
 
 ## Limites du détecteur
 
