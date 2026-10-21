@@ -37,10 +37,30 @@ Mesures défensives appliquées à la plateforme, et pourquoi.
 
 ## WAF
 
-Le WAF bloque les motifs d'injection SQL, XSS et traversée de répertoire (403).
+Le WAF (Caddy) est la seule porte d'entrée. Ce qu'il fait :
+
+- **Filtrage applicatif (403)** : motifs d'injection SQL, XSS, traversée de
+  répertoire et injection de commandes, dans l'URI **et** dans le corps des POST
+  (un payload peut être dans le body, pas seulement dans l'adresse).
+- **Blocage des scanners** : requêtes d'outils d'attaque connus repérés à leur
+  User-Agent (sqlmap, nikto, nmap, masscan) → 403.
+- **En-têtes de sécurité** sur chaque réponse : `X-Content-Type-Options: nosniff`,
+  `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, et suppression de la
+  bannière `Server` (ne renseigne pas l'attaquant sur la techno).
+- **Journalisation exploitable** : l'access log est activé au niveau du site (il
+  ne l'était pas avant, ce qui rendait les blocages invisibles). Chaque blocage
+  porte un marqueur `waf_event: "WAF_BLOCK …"`, distinct des 403 applicatifs, que
+  le SIEM (Loki/Grafana) et le détecteur ML peuvent compter sans ambiguïté.
+
 Il ne prétend pas tout couvrir : le callback de paiement vulnérable passe à
-travers, et c'est précisément ce que rattrapent la détection ML et la
-remédiation. Défense en profondeur : plusieurs couches, aucune infaillible.
+travers (faille de démonstration volontaire), et c'est précisément ce que
+rattrapent la détection ML et la remédiation. Défense en profondeur : plusieurs
+couches, aucune infaillible.
+
+**À ajouter (image Caddy custom via xcaddy)** : une limite de débit par IP
+(module tiers `caddy-ratelimit`, absent de l'image standard) pour freiner les
+rafales. En attendant, un afflux de requêtes est détecté par le ML (catégorie
+`dos`) et traité par la remédiation.
 
 ## SIEM / SOC
 
