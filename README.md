@@ -8,7 +8,7 @@ Workshop EPSI M2 2026-27. Données entièrement fictives, aucune donnée réelle
 
 | Pilier | Dossier | Contenu |
 |---|---|---|
-| **Développement** | [`dev/`](dev/) | API de paiement, authentification, base, moteur de remédiation, dashboard React/Tailwind |
+| **Développement** | [`dev/`](dev/) | Boutique de confiseries, API de paiement, authentification, base, moteur de remédiation, dashboard React/Tailwind |
 | **Infrastructure** | [`infra/`](infra/) | Docker Compose, Ansible, Prometheus, Grafana, Loki |
 | **IA / Data** | [`ai/`](ai/) | Détection d'anomalies par ML + assistant RAG local (Ollama/LangChain) |
 | **Cybersécurité** | [`cyber/`](cyber/) | Attaque Red Team, WAF, SIEM, durcissement, secrets SOPS |
@@ -18,17 +18,20 @@ Workshop EPSI M2 2026-27. Données entièrement fictives, aucune donnée réelle
 ## Le scénario démontré
 
 ```
-1. NORMAL      Une transaction fictive passe (dashboard → WAF → API → base).
+1. NORMAL      Un client achète des confiseries sur la boutique
+               (boutique → WAF → API → base) : la commande est payée.
 2. ATTAQUE     Depuis le PC Attaquant : scan bloqué par le WAF (403), puis abus
-               du callback /pay/callback → l'API tombe en erreur 5xx.
+               du callback /pay/callback → l'API tombe en erreur 5xx ; le
+               paiement du panier échoue.
 3. DÉTECTION   Le détecteur ML lit Prometheus/Loki, repère l'anomalie (5xx), et
                prévient le moteur de remédiation par webhook.
 4. REPRISE     La remédiation redémarre le conteneur api, automatiquement.
-5. PREUVE      Une nouvelle transaction fictive réussit. Zéro intervention humaine.
+5. PREUVE      Le client repaie son panier : la commande passe. Zéro intervention humaine.
 ```
 
-Le tout est visible sur le dashboard (http://127.0.0.1:3000) et dans Grafana
-(http://127.0.0.1:3001) : état du service avant, pendant et après l'incident.
+Côté client : la boutique (http://127.0.0.1:3002). Côté opérateur : le dashboard
+(http://127.0.0.1:3000) et Grafana (http://127.0.0.1:3001), qui montrent l'état du
+service avant, pendant et après l'incident.
 
 > **Ouvrir via `127.0.0.1`, pas `localhost`.** Sous Windows + Docker Desktop, le navigateur
 > peut résoudre `localhost` en IPv6 vers le relais WSL (`wslrelay`), qui accepte la connexion
@@ -66,14 +69,15 @@ python cyber/attack/attack.py --target http://192.168.137.1:8080
 ```
 
 Puis observer sur le dashboard : passage en `anomaly`, redémarrage automatique,
-retour à `normal`, et une nouvelle transaction qui réussit.
+retour à `normal`. Sur la boutique, repayer un panier : la commande réussit.
 
 ## Services et ports
 
 | Exposé sur l'hôte | Service | Interne seulement |
 |---|---|---|
 | 8080 (WAF, entrée publique) | api, auth | db, prometheus, loki, promtail, cadvisor, ollama |
-| 3000 (dashboard) | frontend | |
+| 3002 (boutique, site client) | shop | |
+| 3000 (dashboard, back-office) | frontend | |
 | 3001 (Grafana) | grafana | |
 | 127.0.0.1:8000 / 8001 / 8200 | détecteur / assistant / remédiation (pour le dashboard) | |
 
@@ -82,7 +86,7 @@ retour à `normal`, et une nouvelle transaction qui réussit.
 ```
 compose.yml          orchestration des 5 piliers
 .env.example         secrets et réglages (copier en .env)
-dev/                 microservices + remédiation + dashboard
+dev/                 boutique + microservices + remédiation + dashboard
 infra/               observabilité + Ansible
 ai/                  détecteur ML + assistant RAG  (tests : cd ai && pytest)
 cyber/               attaque + WAF + secrets + durcissement

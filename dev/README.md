@@ -4,11 +4,44 @@ Les microservices métier et le moteur de reprise.
 
 | Service | Port interne | Rôle |
 |---|---|---|
-| `db` | 5432 | PostgreSQL : table `transactions` |
-| `auth` | 8100 | Émet un jeton JWT (`POST /login`) |
-| `api` | 8000 | API de paiement : `POST /transactions` (jeton requis), `GET /transactions`, `/metrics`, `/healthz` |
+| `db` | 5432 | PostgreSQL : `transactions`, `products`, `customers`, `orders`, `order_items` |
+| `auth` | 8100 | Émet un jeton JWT (`POST /login`) ; connexion du back-office |
+| `api` | 8000 | API de paiement : `POST /transactions` (jeton requis), `GET /transactions`, `/metrics`, `/healthz` ; boutique : `/shop/*` |
 | `remediation` | 8200 | Reçoit l'alerte du détecteur (`POST /incident`) et redémarre `api` ; `GET /events` |
-| `frontend` | 3000 | Dashboard React + Tailwind (voir ci-dessous) |
+| `frontend` | 3000 | Dashboard / back-office React + Tailwind (voir ci-dessous) |
+| `shop` | 3002 | Boutique de confiseries React + Tailwind, site public des clients (voir ci-dessous) |
+
+## La boutique (`shop/`)
+
+Le site client : catalogue de confiseries, panier, compte client, paiement et
+historique d'achat. Il est **séparé du back-office** (autre port, autre code) :
+la boutique peut être exposée au réseau, le back-office reste réservé à l'opérateur.
+
+Elle n'appelle que le WAF (`:8080`), qui relaie `/shop/*` vers l'`api`. Le trafic
+client suit donc le même chemin que l'attaque : filtré, journalisé dans Loki,
+compté dans les métriques que lit le détecteur. Pendant l'incident, le paiement
+échoue (500) ; après le redémarrage automatique, il repasse : c'est la preuve de reprise.
+
+| Route (`api`) | Rôle |
+|---|---|
+| `GET /shop/products` | Catalogue (inséré au premier démarrage, liste `PRODUCTS`) |
+| `POST /shop/register` | Création de compte : mot de passe haché (scrypt salé), jeton client |
+| `POST /shop/login` | Connexion : même message d'erreur que l'e-mail existe ou non |
+| `POST /shop/orders` | Commande payée (jeton client) : prix lus en base, stock vérifié, une transaction créée, tout ou rien |
+| `GET /shop/orders` | Historique du client connecté, et de lui seul |
+
+Le jeton client porte l'audience `customer` : il ne sert ni sur `/transactions`
+ni au back-office. Le site ne recharge le catalogue qu'à l'ouverture et après une
+commande (pas de rafraîchissement périodique), pour ne pas fausser le trafic
+« normal » appris par le détecteur.
+
+Les photos des produits sont dans `shop/public/products/<id>.jpg` (sans photo,
+le site affiche l'emoji du produit). Elles viennent de Wikimedia Commons sous
+licence libre ; auteurs et licences sont dans `shop/src/credits.js` et affichés
+en bas de la boutique, comme l'exigent les licences CC BY / CC BY-SA.
+
+Pour ouvrir la boutique depuis un autre PC du réseau, ajouter son adresse
+(`http://<IP du PC Hôte>:3002`) à `SHOP_ORIGINS` dans `.env` (CORS).
 
 ## Le dashboard (`frontend/`)
 
