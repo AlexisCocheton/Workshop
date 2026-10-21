@@ -23,13 +23,13 @@ FEATURES = {
     # l'API elle-même (prometheus_client), plutôt que cAdvisor dont le label
     # `name` est absent sur Docker Desktop/WSL2.
     "api_cpu": ("prometheus", 'sum(rate(process_cpu_seconds_total{job="api"}[30s]))'),
-    # waf_blocks retirée : le filtre Loki `|= "403"` attrapait TOUTE ligne de log
-    # contenant « 403 » (403 applicatifs d'auth, nombres dans un champ…), pas les
-    # blocages du WAF. Non nulle en temps normal, elle cassait l'hypothèse « 0 en
-    # temps normal » du modèle et provoquait des faux positifs. L'attaque applicative
-    # reste vue par err_4xx_rate ; l'incident callback par err_5xx_rate. À réactiver
-    # quand le WAF émettra un marqueur de log distinct des 403 applicatifs (pôle Cyber) :
-    # "waf_blocks": ("loki", 'sum(count_over_time({container="waf"} | json | status="403" [30s]))'),
+    # waf_blocks RÉACTIVÉE. Elle avait été retirée car le filtre `|= "403"` attrapait
+    # toute ligne contenant « 403 » (403 applicatifs d'auth inclus) : non nulle en temps
+    # normal, elle cassait l'hypothèse « 0 en temps normal » du modèle. Le WAF émet
+    # maintenant un marqueur de log DISTINCT à chaque blocage (`log_append waf_event
+    # "WAF_BLOCK …"` dans cyber/waf/Caddyfile) : on compte ce marqueur, jamais présent
+    # dans le trafic normal. La condition posée lors du retrait est donc remplie.
+    "waf_blocks": ("loki", 'sum(count_over_time({container="waf"} |= "WAF_BLOCK" [30s]))'),
 }
 FEATURE_NAMES = list(FEATURES)
 
