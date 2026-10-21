@@ -1,5 +1,5 @@
 // Nom de la boutique : à changer ici (et dans index.html) si l'équipe en choisit un autre.
-export const SHOP_NAME = "Confiserie Alpha";
+export const SHOP_NAME = "Confiserie Alpha Prime";
 
 const tab = (active) =>
   `rounded-full px-4 py-1.5 text-sm font-semibold ${active ? "bg-candy-pink text-white" : "hover:bg-candy-light"}`;
