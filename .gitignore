@@ -50,3 +50,7 @@ dev/frontend/dist/
 # Dossier : on versionne le .md source, pas le rendu
 Dossier.html
 Dossier.pdf
+
+# --- Node (dashboard, boutique) ---
+**/node_modules/
+**/dist/

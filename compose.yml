@@ -51,6 +51,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?définir JWT_SECRET dans .env}
       DB_DSN: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:?définir POSTGRES_PASSWORD dans .env}@db:5432/${POSTGRES_DB:-payments}
       DASHBOARD_ORIGINS: ${DASHBOARD_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      # Boutique (CORS) : ajouter http://<IP du PC Hôte>:3002 pour l'ouvrir depuis le réseau.
+      SHOP_ORIGINS: ${SHOP_ORIGINS:-http://localhost:3002,http://127.0.0.1:3002}
     depends_on:
       - db
 
@@ -71,6 +73,14 @@ services:
     container_name: frontend
     ports:
       - "3000:3000"
+
+  # Boutique de confiseries : site public des clients, séparé du back-office.
+  # Elle n'appelle que le WAF (:8080), comme un vrai client.
+  shop:
+    build: ./dev/shop
+    container_name: shop
+    ports:
+      - "3002:3002"
 
   # --- Pôle Cyber : WAF (seule porte d'entrée) ---
   waf:
