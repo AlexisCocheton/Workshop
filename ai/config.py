@@ -29,6 +29,11 @@ CONTAMINATION = float(os.getenv("CONTAMINATION", "0.01"))       # part de points
 REMEDIATION_URL = os.getenv("REMEDIATION_URL", "")  # vide = pas de webhook (le détecteur ne fait que journaliser)
 REMEDIATION_TOKEN = os.getenv("REMEDIATION_TOKEN", "")
 
+# --- Alerte Telegram (notification humaine, en plus de la remédiation automatique) ---
+# Le token et le chat_id viennent du .env, jamais du code (secrets). Vides = pas d'alerte.
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+
 # --- Assistant RAG ---
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")  # 8B paramètres maximum (sujet §3.3)

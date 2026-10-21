@@ -32,9 +32,11 @@ def placement_hint(faces: list, width: int, height: int) -> str | None:
         return "Un seul visage SVP" if faces else "Placez votre visage dans l'ovale"
     top, right, bottom, left = faces[0]
     size = (right - left) / width
-    if size < 0.20:
+    # Seuil bas (12 %) : accepte un visage à distance normale d'un portable. En
+    # dessous, le visage est trop petit pour un encodage fiable.
+    if size < 0.12:
         return "Rapprochez-vous"
-    if size > 0.60:
+    if size > 0.70:
         return "Reculez un peu"
     if abs((left + right) / 2 - width / 2) > 0.12 * width or abs((top + bottom) / 2 - height / 2) > 0.15 * height:
         return "Centrez votre visage dans l'ovale"

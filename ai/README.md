@@ -111,6 +111,29 @@ Authorization: Bearer $REMEDIATION_TOKEN
 | `assistant:8001/ask` | Dashboard : `POST {"question": "..."}` → `{"answer", "sources"}` |
 | `127.0.0.1:8002/verify` (PC Hôte, hors Docker) | `auth` via `host.docker.internal` : `POST {"username": "..."}` → `{"recognized", "reason"}` |
 
+## Alerte Telegram (notification humaine)
+
+En plus de la remédiation automatique, le détecteur envoie un message Telegram au
+**changement d'état** (passage en anomalie, puis retour à la normale) — jamais à chaque
+point : même logique que le webhook, après le debounce de 3 points. L'alerte porte le score
+et les features en cause, pour que l'opérateur sache *quoi* regarder.
+
+Le détecteur **n'agit pas** pour autant : il notifie, la remédiation corrige. C'est une
+alerte de supervision, pas un canal de commande.
+
+Configuration (dans `.env`, jamais dans le code) :
+
+```
+TELEGRAM_BOT_TOKEN=123456789:ABC...     # donné par @BotFather
+TELEGRAM_CHAT_ID=...                     # id du destinataire (voir ci-dessous)
+```
+
+Récupérer le `chat_id` : écrire un message au bot, puis ouvrir
+`https://api.telegram.org/bot<TOKEN>/getUpdates` → champ `chat.id`.
+
+Si les deux variables sont vides, l'alerte est simplement désactivée : le détecteur fonctionne
+à l'identique. Une alerte qui échoue (réseau coupé) n'interrompt jamais la détection.
+
 ## Sécurité
 
 - Aucun service IA n'a accès au socket Docker ni à une action sur le système.
@@ -274,10 +297,11 @@ face\.venv\Scripts\python -m uvicorn face.service:app --host 127.0.0.1 --port 80
 
 Sans ce service, personne ne peut ouvrir le dashboard (« reconnaissance faciale indisponible »).
 
-Pour tester sans attendre entre deux essais :
-`$env:FACE_RETRY_SECONDS=0; $env:BLOCK_SECONDS=0; docker compose up -d auth`.
+Pour tester sans attendre entre deux essais, et avec un compte `test` qui saute la caméra
+(le mot de passe du back-office reste demandé) :
+`$env:FACE_RETRY_SECONDS=0; $env:BLOCK_SECONDS=0; $env:BACKOFFICE_TEST_USER="test"; docker compose up -d auth`.
 Avant la démo, un simple `docker compose up -d auth` depuis un **nouveau** terminal remet
-les attentes de la consigne (30 s, puis 5 min).
+les attentes de la consigne (30 s, puis 5 min) et désactive le compte `test`.
 Tests sans caméra : `face\.venv\Scripts\python -m pytest tests/test_face.py`.
 
 ### Sécurité et données
@@ -311,6 +335,7 @@ Tests sans caméra : `face\.venv\Scripts\python -m pytest tests/test_face.py`.
 | `detector/collect.py` | Enregistre les features dans `data/normal.csv` ou `data/attack.csv` |
 | `detector/train.py` | Entraîne et évalue le modèle |
 | `detector/service.py` | Détection en continu, `/status`, `/metrics`, webhook |
+| `detector/telegram.py` | Alerte Telegram au changement d'état (optionnelle) |
 | `assistant/rag.py` | Chaîne RAG : documents → passages → LLM |
 | `assistant/service.py` | API `/ask` |
 | `face/service.py` | Reconnaissance faciale du back-office : `/verify` (sur le PC Hôte) |

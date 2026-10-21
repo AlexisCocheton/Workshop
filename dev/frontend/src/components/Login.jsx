@@ -38,7 +38,7 @@ export default function Login({ onLogin }) {
   const submitUsername = (event) =>
     submit(event, () => checkFace(username), (result) => {
       if (result.recognized) setFaceTicket(result.face_ticket);
-      else if (result.ok) restart(`Visage non reconnu (${result.reason}). Nouvel essai possible dans ${result.retry_in} s.`);
+      else if (result.ok) restart(`${result.reason}. Nouvel essai possible dans ${result.retry_in} s.`);
       else setMessage(result.detail); // compte bloqué, caméra indisponible…
     });
 
@@ -93,7 +93,7 @@ export default function Login({ onLogin }) {
                 required
                 autoComplete="username"
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                onChange={(e) => setUsername(e.target.value.trim())}
                 disabled={busy}
                 className={INPUT}
               />

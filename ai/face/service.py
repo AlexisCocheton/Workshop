@@ -46,17 +46,20 @@ def verify(body: UsernameBody):
     except RuntimeError as error:
         raise HTTPException(503, str(error))
     if problem:
-        return {"recognized": False, "reason": f"visage pas bien placé à temps : {problem}"}
+        return {"recognized": False, "reason": f"Visage pas bien placé à temps ({problem})"}
 
     path = encoding_path(body.username)
     if path is None or not path.exists():
-        return {"recognized": False, "reason": "visage non reconnu"}  # ne révèle pas quels comptes existent
+        # Le détail ne va que dans le journal du PC Hôte : la réponse reste la même qu'un
+        # visage inconnu, pour ne pas révéler quels comptes existent. !r : pas d'injection de lignes.
+        print(f"[face] {body.username!r} : aucun visage enregistré pour cet identifiant", flush=True)
+        return {"recognized": False, "reason": "Visage non reconnu"}
     known = np.load(path)
     distance = face_recognition.face_distance([known], face_recognition.face_encodings(image, [face])[0])[0]
     # La distance n'est que journalisée : la renvoyer aiderait un attaquant à s'approcher du seuil.
-    print(f"[face] {body.username} : distance {distance:.2f} (seuil {FACE_TOLERANCE})", flush=True)
+    print(f"[face] {body.username!r} : distance {distance:.2f} (seuil {FACE_TOLERANCE})", flush=True)
     if distance > FACE_TOLERANCE:
-        return {"recognized": False, "reason": "visage non reconnu"}
+        return {"recognized": False, "reason": "Visage non reconnu"}
     return {"recognized": True, "reason": None}
 
 

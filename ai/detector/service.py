@@ -29,6 +29,7 @@ from config import (
     REMEDIATION_URL,
 )
 from detector.features import FEATURE_NAMES, api_healthy, fetch_now
+from detector.telegram import send_alert
 
 ANOMALY_SCORE = Gauge("aiops_anomaly_score", "Score du modèle : > 0 = point anormal")
 ANOMALY = Gauge("aiops_anomaly", "1 si une anomalie est déclarée (après debounce), sinon 0")
@@ -137,7 +138,8 @@ def run_forever():
         ANOMALY_SCORE.set(point_score)
         ANOMALY.set(int(debouncer.in_anomaly))
         if event:
-            notify_remediation(event)
+            notify_remediation(event)  # action automatique : redémarrage de l'API (pôle Dev)
+            send_alert(event, status["score"], status["top_features"])  # notification humaine
         time.sleep(POLL_SECONDS)
 
 

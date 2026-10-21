@@ -13,6 +13,9 @@ services:
       LOKI_URL: http://loki:3100
       REMEDIATION_URL: ${REMEDIATION_URL:-http://remediation:8200/incident}
       REMEDIATION_TOKEN: ${REMEDIATION_TOKEN:?définir REMEDIATION_TOKEN dans .env}  # fourni par Vault/SOPS en vrai
+      # Alerte Telegram (optionnelle) : vides = pas d'alerte, le détecteur fonctionne quand même.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
       DASHBOARD_ORIGINS: ${DASHBOARD_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
     volumes:
       - ./data:/app/data  # CSV collectés + modèle entraîné

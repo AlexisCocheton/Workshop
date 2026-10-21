@@ -39,6 +39,12 @@ DEMO_PASSWORD = os.getenv("DEMO_PASSWORD", "app")
 # fermé, mais /login continue de fonctionner : les paiements n'en dépendent pas.
 BACKOFFICE_USER = os.getenv("BACKOFFICE_USER", "admin")
 BACKOFFICE_PASSWORD = os.getenv("BACKOFFICE_PASSWORD", "")
+# Compte de test qui saute la caméra (même mot de passe), pour développer. Vide = désactivé.
+# Ne jamais l'activer en démo : il contourne la reconnaissance faciale exigée par la consigne.
+TEST_USER = os.getenv("BACKOFFICE_TEST_USER", "")
+OPERATORS = {user for user in (BACKOFFICE_USER, TEST_USER) if user}  # identifiants admis au back-office
+if TEST_USER:
+    print(f"[auth] ATTENTION : compte de test {TEST_USER!r} actif, sans reconnaissance faciale", flush=True)
 # Service de reconnaissance faciale, lancé sur le PC Hôte où est branchée la caméra.
 FACE_URL = os.getenv("FACE_URL", "http://host.docker.internal:8002")
 
@@ -125,6 +131,10 @@ def login(credentials: Credentials):
 def backoffice_face(body: FaceRequest):
     """Étape 1 : la caméra du PC Hôte vérifie que la personne est bien l'opérateur."""
     check_not_blocked(body.username)
+    if TEST_USER and body.username == TEST_USER:
+        print(f"[auth] ATTENTION : compte de test {TEST_USER!r} : caméra sautée", flush=True)
+        set_led("face_ok")
+        return {"recognized": True, "face_ticket": make_token(body.username, "face", FACE_TICKET_SECONDS)}
     try:
         # 25 s : l'opérateur dispose de 15 s pour placer son visage devant la caméra
         response = httpx.post(f"{FACE_URL}/verify", json={"username": body.username}, timeout=25)
@@ -154,7 +164,7 @@ def backoffice_login(body: BackofficeCredentials):
         raise HTTPException(401, "Reconnaissance faciale expirée : recommencez.")
     # compare_digest : temps de comparaison constant, ne laisse pas deviner le mot de passe
     password_ok = hmac.compare_digest(body.password.encode(), BACKOFFICE_PASSWORD.encode())
-    if body.user != BACKOFFICE_USER or not password_ok:
+    if body.user not in OPERATORS or not password_ok:
         set_led("password_bad")
         record_failure(body.user)
         raise HTTPException(401, "Mot de passe incorrect : recommencez l'identification.")

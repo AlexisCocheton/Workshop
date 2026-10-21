@@ -60,6 +60,6 @@ def test_placement_hint():
     assert placement_hint([CENTERED], 640, 480) is None
     assert placement_hint([], 640, 480) == "Placez votre visage dans l'ovale"
     assert placement_hint([CENTERED, CENTERED], 640, 480) == "Un seul visage SVP"  # intrus + opérateur
-    assert placement_hint([(190, 370, 290, 270)], 640, 480) == "Rapprochez-vous"  # 100 px = 16 % de la largeur
-    assert placement_hint([(40, 520, 440, 120)], 640, 480) == "Reculez un peu"  # 400 px = 62 %
+    assert placement_hint([(210, 340, 280, 300)], 640, 480) == "Rapprochez-vous"  # 40 px = 6 % de la largeur
+    assert placement_hint([(20, 560, 460, 80)], 640, 480) == "Reculez un peu"  # 480 px = 75 %
     assert placement_hint([(120, 570, 360, 370)], 640, 480) == "Centrez votre visage dans l'ovale"  # 150 px à droite
