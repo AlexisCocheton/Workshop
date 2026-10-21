@@ -208,21 +208,20 @@ IsolationForest ne coupe jamais sur une feature constante pendant l'apprentissag
 donc pas une feature qui vaut toujours 0 en temps normal (erreurs 5xx, blocages WAF), alors que
 c'est précisément ce qui bouge lors d'un incident.
 
-**Résultats sur notre plateforme** (collecte réelle du 2026-10-19 : 178 points de trafic normal
-en 15 min — cycles calme / montée / palier / descente, de 0,3 à 4,4 req/s, générés par
-`traffic.py` — et 24 points d'attaque callback → 5xx) :
+**Résultats sur notre plateforme** (collecte réelle du 2026-10-21 : 239 points de trafic normal
+en 20 min — cycles calme / montée / palier / descente, de 0,3 à 5,7 req/s, générés par
+`traffic.py`, incluant la navigation sur la boutique `/shop/*` — et 24 points d'attaque callback → 5xx) :
 
 | Indicateur | Valeur |
 |---|---|
-| Faux positifs (45 points de trafic normal de test) | 0 % |
+| Faux positifs (60 points de trafic normal de test) | 0 % |
 | Précision | 100 % |
-| Rappel (points d'attaque détectés) | 87,5 % |
-| Matrice de confusion | TN 45, FP 0, FN 3, TP 21 |
-| Fausses alertes en direct (5 min de trafic variable, 3 cycles) | 0 (score max −0,46, seuil 0) |
+| Rappel (points d'attaque détectés) | 100 % |
+| Matrice de confusion | TN 60, FP 0, FN 0, TP 24 |
 | Délai de reprise complète (détection + redémarrage) | ~30 s, nouvelle transaction réussie |
 
-Les 3 points ratés (FN) sont les tout premiers de l'incident, avant que les fenêtres `rate[30s]`
-ne montent : c'est attendu et sans conséquence (le debounce attend de toute façon 3 points).
+Le modèle a été réentraîné en incluant le trafic de la boutique (ajoutée après la première
+collecte), pour qu'il ne prenne pas une simple visite de la boutique pour une anomalie.
 
 **Compromis de sensibilité.** Entraîné sur un trafic normal riche, le modèle tolère mieux les
 variations de charge, mais réagit moins aux petits taux d'erreurs : ~5 erreurs 5xx/s sont
@@ -232,7 +231,7 @@ de toute façon couverte par le contrôle de santé actif, indépendant du trafi
 **Fausse alerte corrigée.** Une première version, entraînée sur 5 min de trafic stable (~45 points),
 prenait la *montée en charge* au démarrage du trafic pour une anomalie (score positif à 1,5 req/s) :
 elle a déclenché un redémarrage inutile de l'API pendant un test. Le modèle actuel, entraîné sur
-15 min de cycles variés, ne produit aucun score positif sur la même montée.
+20 min de cycles variés (boutique incluse), ne produit aucun score positif sur la même montée.
 
 **Note sur l'évaluation.** Le découpage train/test du trafic normal est *mélangé* (`shuffle=True`),
 pas chronologique. Les collectes étant courtes, un découpage chronologique isolerait tout un régime
