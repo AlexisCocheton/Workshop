@@ -4,15 +4,17 @@ import pytest
 from detector import telegram
 
 
-def test_message_anomaly_contient_score_et_features():
-    msg = telegram._format("anomaly", 36.7, [{"name": "err_5xx_rate", "value": 20.0, "zscore": 9.1}])
+def test_message_anomaly_contient_score_features_et_type():
+    incident = {"category": "service_error", "reason": "erreurs 5xx", "suspect_feature": "err_5xx_rate"}
+    msg = telegram._format("anomaly", 36.7, [{"name": "err_5xx_rate", "value": 20.0, "zscore": 9.1}], incident)
     assert "Anomalie détectée" in msg
     assert "36.7" in msg
     assert "err_5xx_rate" in msg
+    assert "service_error" in msg  # la catégorie de l'incident est affichée
 
 
 def test_message_recovered():
-    assert "Retour à la normale" in telegram._format("recovered", None, [])
+    assert "Retour à la normale" in telegram._format("recovered", None, [], None)
 
 
 def test_send_alert_ne_fait_rien_sans_config(monkeypatch):

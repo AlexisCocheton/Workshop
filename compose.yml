@@ -43,6 +43,11 @@ services:
       DASHBOARD_ORIGINS: ${DASHBOARD_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
     extra_hosts:
       - "host.docker.internal:host-gateway"  # déjà fourni par Docker Desktop ; nécessaire sous Linux
+    # Durcissement : pas d'élévation de privilèges, aucune capability Linux.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
   api:
     build: ./dev/api
@@ -53,6 +58,11 @@ services:
       DASHBOARD_ORIGINS: ${DASHBOARD_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       # Boutique (CORS) : ajouter http://<IP du PC Hôte>:3002 pour l'ouvrir depuis le réseau.
       SHOP_ORIGINS: ${SHOP_ORIGINS:-http://localhost:3002,http://127.0.0.1:3002}
+    # Durcissement : pas d'élévation de privilèges, aucune capability Linux.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     depends_on:
       - db
 
@@ -84,12 +94,23 @@ services:
 
   # --- Pôle Cyber : WAF (seule porte d'entrée) ---
   waf:
-    image: caddy:2.8-alpine
+    build: ./cyber/waf  # image Caddy + module caddy-ratelimit (voir Dockerfile)
     container_name: waf
     volumes:
       - ./cyber/waf/Caddyfile:/etc/caddy/Caddyfile:ro
     ports:
       - "8080:8080"  # atteint par le PC Attaquant
+    read_only: true  # système de fichiers en lecture seule : un exploit ne peut rien écrire
+    tmpfs:
+      - /tmp
+      - /config  # Caddy y écrit son autosave : volume éphémère en RAM
+      - /data
+    security_opt:
+      - no-new-privileges:true  # empêche un process d'élever ses privilèges
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE  # seule capability conservée : écouter sur un port
     depends_on:
       - api
       - auth

@@ -86,7 +86,11 @@ docker compose restart detector
 | `req_rate` | Prometheus, API métier | `http_requests_total` |
 | `err_4xx_rate`, `err_5xx_rate` | Prometheus, API métier | `http_requests_total{status=~"4.."}`, `{status=~"5.."}` |
 | `api_cpu` | Prometheus, API elle-même | `process_cpu_seconds_total{job="api"}` (cAdvisor n'expose pas le label `name` sur Docker Desktop) |
-| `waf_blocks` | Loki, logs du WAF | `{container="waf"} \|= "403"` |
+
+> `waf_blocks` a été retirée : le filtre Loki `|= "403"` comptait toute ligne de log contenant
+> « 403 » (403 applicatifs, nombres de champs…), pas les blocages du WAF, et faussait le modèle.
+> À réactiver quand le WAF émettra un marqueur de log propre (pôle Cyber). L'attaque applicative
+> reste vue par `err_4xx_rate`.
 
 **Ce que l'IA envoie** au moteur de remédiation, à chaque changement d'état :
 
@@ -98,6 +102,7 @@ Authorization: Bearer $REMEDIATION_TOKEN
   "event": "anomaly",            // ou "recovered"
   "score": 12.4,                 // > 0 = anormal
   "top_features": [{"name": "err_5xx_rate", "value": 8.0, "zscore": 9.1}, ...],
+  "incident": {"category": "service_error", "reason": "...", "suspect_feature": "err_5xx_rate"},
   "timestamp": "2026-10-21T14:03:12+00:00"
 }
 ```
@@ -110,6 +115,33 @@ Authorization: Bearer $REMEDIATION_TOKEN
 | `detector:8000/status` | Dashboard : état (`normal`, `anomaly`, `unknown`, `no_model`), score, features en cause |
 | `assistant:8001/ask` | Dashboard : `POST {"question": "..."}` → `{"answer", "sources"}` |
 | `127.0.0.1:8002/verify` (PC Hôte, hors Docker) | `auth` via `host.docker.internal` : `POST {"username": "..."}` → `{"recognized", "reason"}` |
+
+## Qualification de l'incident (détecteur spécialisé défense)
+
+Quand le détecteur passe en anomalie, il ne dit plus seulement « anomalie » : il **qualifie
+l'incident** par une catégorie, à partir de la feature la plus anormale (le z-score que le
+modèle calcule déjà). Cela permet à la remédiation de choisir la bonne réponse et à
+l'opérateur de comprendre tout de suite à quoi il a affaire.
+
+| Catégorie | Déclenchée par | Sens |
+|---|---|---|
+| `api_down` | l'API ne répond plus (contrôle de santé) | panne de disponibilité, avec ou sans trafic |
+| `app_attack` | pic d'erreurs 4xx ou de blocages WAF | scan, injection, brute force |
+| `dos` | afflux de requêtes (`req_rate`) | déni de service |
+| `service_error` | pic d'erreurs 5xx | panne interne ou vulnérabilité exploitée (ex : callback) |
+| `unknown` | anormal sans feature dominante | à investiguer avant d'agir |
+
+La catégorie est choisie selon la feature **la plus** anormale (pas un ordre fixe) : pendant
+l'exploit du callback, le trafic monte avec les 5xx, mais les 5xx dominent, donc c'est bien
+`service_error` et non `dos`. Le détecteur **ne décide ni n'agit** : il qualifie. La catégorie
+est ajoutée au webhook, au `/status` (champ `incident`) et à l'alerte Telegram.
+
+Côté réponse : l'assistant RAG dispose d'une procédure par catégorie (`docs/reponse-incident.md`),
+pour guider l'opérateur. La riposte active (bloquer la source d'une attaque) est une action **au
+WAF**, décidée par l'humain ou ajoutée au moteur de remédiation (pôle Dev) — jamais par le
+détecteur ni l'assistant.
+
+Qualification testée sans réseau : `tests/test_classify.py`.
 
 ## Alerte Telegram (notification humaine)
 
@@ -144,7 +176,7 @@ Si les deux variables sont vides, l'alerte est simplement désactivée : le dét
 
 ## Pour le dossier technique (§3.3)
 
-**Données.** Six features mesurées toutes les 5 s (tableau ci-dessus). La collecte utilise
+**Données.** Quatre features mesurées toutes les 5 s (tableau ci-dessus). La collecte utilise
 la même fonction que le service en production (`fetch_now`) : le modèle est entraîné exactement
 sur ce qu'il voit en direct.
 
@@ -176,21 +208,20 @@ IsolationForest ne coupe jamais sur une feature constante pendant l'apprentissag
 donc pas une feature qui vaut toujours 0 en temps normal (erreurs 5xx, blocages WAF), alors que
 c'est précisément ce qui bouge lors d'un incident.
 
-**Résultats sur notre plateforme** (collecte réelle du 2026-10-19 : 178 points de trafic normal
-en 15 min — cycles calme / montée / palier / descente, de 0,3 à 4,4 req/s, générés par
-`traffic.py` — et 24 points d'attaque callback → 5xx) :
+**Résultats sur notre plateforme** (collecte réelle du 2026-10-21 : 239 points de trafic normal
+en 20 min — cycles calme / montée / palier / descente, de 0,3 à 5,7 req/s, générés par
+`traffic.py`, incluant la navigation sur la boutique `/shop/*` — et 24 points d'attaque callback → 5xx) :
 
 | Indicateur | Valeur |
 |---|---|
-| Faux positifs (45 points de trafic normal de test) | 0 % |
+| Faux positifs (60 points de trafic normal de test) | 0 % |
 | Précision | 100 % |
-| Rappel (points d'attaque détectés) | 87,5 % |
-| Matrice de confusion | TN 45, FP 0, FN 3, TP 21 |
-| Fausses alertes en direct (5 min de trafic variable, 3 cycles) | 0 (score max −0,46, seuil 0) |
+| Rappel (points d'attaque détectés) | 100 % |
+| Matrice de confusion | TN 60, FP 0, FN 0, TP 24 |
 | Délai de reprise complète (détection + redémarrage) | ~30 s, nouvelle transaction réussie |
 
-Les 3 points ratés (FN) sont les tout premiers de l'incident, avant que les fenêtres `rate[30s]`
-ne montent : c'est attendu et sans conséquence (le debounce attend de toute façon 3 points).
+Le modèle a été réentraîné en incluant le trafic de la boutique (ajoutée après la première
+collecte), pour qu'il ne prenne pas une simple visite de la boutique pour une anomalie.
 
 **Compromis de sensibilité.** Entraîné sur un trafic normal riche, le modèle tolère mieux les
 variations de charge, mais réagit moins aux petits taux d'erreurs : ~5 erreurs 5xx/s sont
@@ -200,7 +231,7 @@ de toute façon couverte par le contrôle de santé actif, indépendant du trafi
 **Fausse alerte corrigée.** Une première version, entraînée sur 5 min de trafic stable (~45 points),
 prenait la *montée en charge* au démarrage du trafic pour une anomalie (score positif à 1,5 req/s) :
 elle a déclenché un redémarrage inutile de l'API pendant un test. Le modèle actuel, entraîné sur
-15 min de cycles variés, ne produit aucun score positif sur la même montée.
+20 min de cycles variés (boutique incluse), ne produit aucun score positif sur la même montée.
 
 **Note sur l'évaluation.** Le découpage train/test du trafic normal est *mélangé* (`shuffle=True`),
 pas chronologique. Les collectes étant courtes, un découpage chronologique isolerait tout un régime
@@ -335,6 +366,7 @@ Tests sans caméra : `face\.venv\Scripts\python -m pytest tests/test_face.py`.
 | `detector/collect.py` | Enregistre les features dans `data/normal.csv` ou `data/attack.csv` |
 | `detector/train.py` | Entraîne et évalue le modèle |
 | `detector/service.py` | Détection en continu, `/status`, `/metrics`, webhook |
+| `detector/classify.py` | Qualifie l'incident (attaque, panne…) à partir des features |
 | `detector/telegram.py` | Alerte Telegram au changement d'état (optionnelle) |
 | `assistant/rag.py` | Chaîne RAG : documents → passages → LLM |
 | `assistant/service.py` | API `/ask` |
