@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import Header from "./components/Header.jsx";
 import ProductGrid from "./components/ProductGrid.jsx";
 import Cart from "./components/Cart.jsx";
+import Home from "./components/Home.jsx";
 import Orders from "./components/Orders.jsx";
+import Profile from "./components/Profile.jsx";
 import { fetchProducts } from "./api.js";
 import { PHOTO_CREDITS } from "./credits.js";
 
@@ -28,7 +30,7 @@ export default function App() {
   const [loadError, setLoadError] = useState(null);
   const [cart, setCart] = useState(() => load("cart", {})); // { idProduit: quantité }
   const [session, setSession] = useState(() => load("session", null)); // { token, name }
-  const [view, setView] = useState("shop"); // "shop" ou "orders"
+  const [view, setView] = useState("home"); // "home", "shop", "orders" ou "profile"
 
   useEffect(() => save("cart", cart), [cart]);
   useEffect(() => save("session", session), [session]);
@@ -65,8 +67,13 @@ export default function App() {
     <div className="min-h-screen">
       <Header session={session} cartCount={cartCount} view={view} onView={setView} onLogout={logout} />
       <main className="mx-auto max-w-6xl px-4 py-6">
-        {view === "orders" && session ? (
+        {view === "home" ? (
+          <Home products={products} onShop={() => setView("shop")} />
+        ) : view === "orders" && session ? (
           <Orders session={session} onExpired={logout} />
+        ) : view === "profile" && session ? (
+          // Le prénom affiché dans l'en-tête suit les modifications du profil.
+          <Profile session={session} onExpired={logout} onNameChange={(name) => setSession({ ...session, name })} />
         ) : (
           <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
             <ProductGrid products={products} loadError={loadError} cart={cart} onQuantity={setQuantity} />

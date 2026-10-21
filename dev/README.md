@@ -29,6 +29,9 @@ compté dans les métriques que lit le détecteur. Pendant l'incident, le paieme
 | `POST /shop/login` | Connexion : même message d'erreur que l'e-mail existe ou non |
 | `POST /shop/orders` | Commande payée (jeton client) : prix lus en base, stock vérifié, une transaction créée, tout ou rien |
 | `GET /shop/orders` | Historique du client connecté, et de lui seul |
+| `GET /shop/profile` | Profil du client connecté : e-mail, prénom, téléphone, adresse (jamais le mot de passe) |
+| `PUT /shop/profile` | Modification du profil (e-mail unique, code postal à 5 chiffres) |
+| `PUT /shop/profile/password` | Changement de mot de passe : l'ancien est exigé, le jeton seul ne suffit pas |
 
 Le jeton client porte l'audience `customer` : il ne sert ni sur `/transactions`
 ni au back-office. Le site ne recharge le catalogue qu'à l'ouverture et après une
@@ -52,6 +55,11 @@ Les photos des produits sont dans `shop/public/products/<id>.jpg` (sans photo,
 le site affiche l'emoji du produit). Elles viennent de Wikimedia Commons sous
 licence libre ; auteurs et licences sont dans `shop/src/credits.js` et affichés
 en bas de la boutique, comme l'exigent les licences CC BY / CC BY-SA.
+
+La page d'accueil présente la boutique physique (fictive) de Montpellier avec
+une mini-carte : `react-leaflet` et les tuiles OpenStreetMap, gratuites et sans
+clé d'API (le navigateur doit donc avoir accès à Internet pour afficher le fond
+de carte). Adresse, position GPS et horaires se changent dans `shop/src/store.js`.
 
 Pour ouvrir la boutique depuis un autre PC du réseau, ajouter son adresse
 (`http://<IP du PC Hôte>:3002`) à `SHOP_ORIGINS` dans `.env` (CORS).

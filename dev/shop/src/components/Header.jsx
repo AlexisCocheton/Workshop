@@ -13,12 +13,20 @@ export default function Header({ session, cartCount, view, onView, onLogout }) {
           {SHOP_NAME}
         </h1>
         <nav className="flex gap-1">
+          <button className={tab(view === "home")} onClick={() => onView("home")}>
+            Accueil
+          </button>
           <button className={tab(view === "shop")} onClick={() => onView("shop")}>
             Boutique{cartCount > 0 && ` · ${cartCount} 🛒`}
           </button>
           {session && (
             <button className={tab(view === "orders")} onClick={() => onView("orders")}>
               Mes commandes
+            </button>
+          )}
+          {session && (
+            <button className={tab(view === "profile")} onClick={() => onView("profile")}>
+              Mon profil
             </button>
           )}
         </nav>

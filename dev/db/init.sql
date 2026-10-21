@@ -28,7 +28,12 @@ CREATE TABLE IF NOT EXISTS customers (
     email          TEXT NOT NULL UNIQUE,
     name           TEXT NOT NULL,
     password_hash  TEXT NOT NULL,
-    created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- Profil (page « Mon profil ») : facultatif, vide par défaut.
+    phone          TEXT NOT NULL DEFAULT '',
+    street         TEXT NOT NULL DEFAULT '',
+    postal_code    TEXT NOT NULL DEFAULT '',
+    city           TEXT NOT NULL DEFAULT ''
 );
 
 -- Commandes : chacune est payée par une transaction.

@@ -3,7 +3,7 @@ import { euros } from "../api.js";
 
 // Photo du produit (public/products/<id>.jpg). Sans photo (produit ajouté plus
 // tard), on retombe sur l'emoji stocké en base.
-function ProductImage({ product }) {
+export function ProductImage({ product }) {
   const [missing, setMissing] = useState(false);
   if (missing) {
     return (

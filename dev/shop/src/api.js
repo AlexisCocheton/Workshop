@@ -23,6 +23,11 @@ export const fetchProducts = () => call("/shop/products");
 export const register = (email, name, password) => call("/shop/register", { method: "POST", body: { email, name, password } });
 export const login = (email, password) => call("/shop/login", { method: "POST", body: { email, password } });
 export const fetchOrders = (token) => call("/shop/orders", { token });
+export const fetchProfile = (token) => call("/shop/profile", { token });
+// profile : { email, name, phone, street, postal_code, city }
+export const updateProfile = (token, profile) => call("/shop/profile", { method: "PUT", token, body: profile });
+export const changePassword = (token, current_password, new_password) =>
+  call("/shop/profile/password", { method: "PUT", token, body: { current_password, new_password } });
 
 // cart : { idProduit: quantité }. Seuls les ids et quantités partent : le prix est fixé par l'API.
 export const placeOrder = (token, cart) =>

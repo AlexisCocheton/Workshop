@@ -89,6 +89,10 @@ CREATE TABLE IF NOT EXISTS products (
 CREATE TABLE IF NOT EXISTS customers (
     id SERIAL PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
     password_hash TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '';
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS street TEXT NOT NULL DEFAULT '';
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS postal_code TEXT NOT NULL DEFAULT '';
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS city TEXT NOT NULL DEFAULT '';
 CREATE TABLE IF NOT EXISTS orders (
     id TEXT PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id),
     transaction_id TEXT NOT NULL REFERENCES transactions(id), total NUMERIC(10, 2) NOT NULL,
@@ -245,6 +249,20 @@ class LoginIn(BaseModel):
     password: str
 
 
+class ProfileIn(BaseModel):
+    email: str
+    name: str
+    phone: str = ""
+    street: str = ""
+    postal_code: str = ""
+    city: str = ""
+
+
+class PasswordIn(BaseModel):
+    current_password: str
+    new_password: str
+
+
 class OrderItemIn(BaseModel):
     product_id: int
     quantity: int
@@ -294,6 +312,61 @@ def shop_login(body: LoginIn):
     if row is None or not password_matches(body.password, row[2]):
         raise HTTPException(401, "e-mail ou mot de passe incorrect")
     return {"token": customer_token(row[0]), "name": row[1]}
+
+
+PROFILE_COLUMNS = ("email", "name", "phone", "street", "postal_code", "city")
+
+
+def read_profile(conn: psycopg.Connection, customer_id: int) -> dict:
+    row = conn.execute(
+        f"SELECT {', '.join(PROFILE_COLUMNS)} FROM customers WHERE id = %s", (customer_id,)
+    ).fetchone()
+    if row is None:  # compte supprimé depuis l'émission du jeton
+        raise HTTPException(401, "session expirée, reconnectez-vous")
+    return dict(zip(PROFILE_COLUMNS, row))
+
+
+@app.get("/shop/profile")
+def get_profile(customer_id: int = Depends(require_customer)):
+    """Informations personnelles du client connecté (jamais le mot de passe)."""
+    with connect() as conn:
+        return read_profile(conn, customer_id)
+
+
+@app.put("/shop/profile")
+def update_profile(body: ProfileIn, customer_id: int = Depends(require_customer)):
+    profile = {key: getattr(body, key).strip() for key in PROFILE_COLUMNS}
+    profile["email"] = profile["email"].lower()
+    if "@" not in profile["email"] or not profile["name"]:
+        raise HTTPException(422, "e-mail ou nom invalide")
+    if profile["postal_code"] and not (profile["postal_code"].isdigit() and len(profile["postal_code"]) == 5):
+        raise HTTPException(422, "le code postal doit faire 5 chiffres")
+    if any(len(value) > 200 for value in profile.values()):
+        raise HTTPException(422, "champ trop long (200 caractères maximum)")
+    try:
+        with connect() as conn:
+            conn.execute(
+                f"UPDATE customers SET {', '.join(f'{key} = %s' for key in PROFILE_COLUMNS)} WHERE id = %s",
+                (*profile.values(), customer_id),
+            )
+            return read_profile(conn, customer_id)
+    except psycopg.errors.UniqueViolation:
+        raise HTTPException(409, "un compte existe déjà avec cet e-mail")
+
+
+@app.put("/shop/profile/password")
+def change_password(body: PasswordIn, customer_id: int = Depends(require_customer)):
+    """Changement de mot de passe : l'ancien est exigé, un jeton volé ne suffit pas."""
+    if len(body.new_password) < 8:
+        raise HTTPException(422, "le mot de passe doit faire au moins 8 caractères")
+    with connect() as conn:
+        row = conn.execute("SELECT password_hash FROM customers WHERE id = %s", (customer_id,)).fetchone()
+        if row is None or not password_matches(body.current_password, row[0]):
+            raise HTTPException(403, "mot de passe actuel incorrect")
+        conn.execute(
+            "UPDATE customers SET password_hash = %s WHERE id = %s", (hash_password(body.new_password), customer_id)
+        )
+    return {"ok": True}
 
 
 @app.post("/shop/orders")
