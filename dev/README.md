@@ -35,6 +35,19 @@ ni au back-office. Le site ne recharge le catalogue qu'à l'ouverture et après 
 commande (pas de rafraîchissement périodique), pour ne pas fausser le trafic
 « normal » appris par le détecteur.
 
+Au paiement, le formulaire de carte (`shop/src/components/PaymentForm.jsx`)
+demande l'e-mail du reçu, l'adresse de livraison (rue, code postal, ville), le titulaire, le numéro, la date d'expiration et le
+code de sécurité (CVC). Il s'appuie sur deux bibliothèques libres :
+`react-credit-cards-2` (aperçu visuel de la carte, marque détectée) et
+`card-validator` de Braintree (numéro vérifié par Luhn, date non dépassée, CVC
+de 3 ou 4 chiffres selon la marque). Les données de carte restent en mémoire le
+temps du paiement : rien dans `localStorage`, et le CVC n'est jamais conservé
+(interdit par PCI-DSS). Seul un résumé masqué (marque et 4 derniers chiffres)
+s'affiche dans la confirmation ; l'API ne reçoit que le panier. Pour tester :
+`4242 4242 4242 4242`, n'importe quelle date future, n'importe quel CVC. Un vrai
+site passerait par un prestataire (Stripe Elements, par exemple) pour que la
+carte ne transite jamais par nos serveurs.
+
 Les photos des produits sont dans `shop/public/products/<id>.jpg` (sans photo,
 le site affiche l'emoji du produit). Elles viennent de Wikimedia Commons sous
 licence libre ; auteurs et licences sont dans `shop/src/credits.js` et affichés

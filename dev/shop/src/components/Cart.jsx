@@ -1,21 +1,29 @@
 import { useState } from "react";
 import AuthForm from "./AuthForm.jsx";
+import PaymentForm from "./PaymentForm.jsx";
 import { euros, placeOrder } from "../api.js";
 
 // Panier et paiement. Le total affiché est indicatif : l'API recalcule avec ses propres prix.
 export default function Cart({ products, cart, onQuantity, session, onLogin, onExpired, onOrdered }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null); // { ok, text }
+  const [paying, setPaying] = useState(false); // formulaire de carte affiché
 
   const lines = products.filter((p) => cart[p.id]).map((p) => ({ ...p, quantity: cart[p.id] }));
   const total = lines.reduce((sum, line) => sum + line.price * line.quantity, 0);
 
-  async function checkout() {
+  // payment : résumé renvoyé par PaymentForm (e-mail, adresse, marque, 4 derniers chiffres).
+  // L'API ne reçoit que le panier : la carte n'est pas transmise (boutique fictive).
+  async function checkout(payment) {
     setBusy(true);
     setResult(null);
     try {
       const order = await placeOrder(session.token, cart);
-      setResult({ ok: true, text: `Commande payée : ${euros(order.total)} (n° ${order.id.slice(0, 8)}). Merci !` });
+      setResult({
+        ok: true,
+        text: `Commande payée : ${euros(order.total)} avec ${payment.brand} •••• ${payment.last4} (n° ${order.id.slice(0, 8)}). Livraison : ${payment.address.street}, ${payment.address.postalCode} ${payment.address.city}. Reçu envoyé à ${payment.email}. Merci !`,
+      });
+      setPaying(false);
       onOrdered();
     } catch (error) {
       if (error.status === 401) onExpired();
@@ -57,14 +65,16 @@ export default function Cart({ products, cart, onQuantity, session, onLogin, onE
       )}
 
       {lines.length > 0 && !session && <AuthForm onLogin={onLogin} />}
-      {lines.length > 0 && session && (
+      {lines.length > 0 && session && !paying && (
         <button
-          onClick={checkout}
-          disabled={busy}
-          className="mt-4 w-full rounded-full bg-candy-ink px-4 py-2.5 font-semibold text-white hover:bg-candy-ink/85 disabled:opacity-60"
+          onClick={() => { setPaying(true); setResult(null); }}
+          className="mt-4 w-full rounded-full bg-candy-ink px-4 py-2.5 font-semibold text-white hover:bg-candy-ink/85"
         >
-          {busy ? "Paiement en cours…" : `Payer ${euros(total)}`}
+          Payer {euros(total)}
         </button>
+      )}
+      {lines.length > 0 && session && paying && (
+        <PaymentForm amountLabel={euros(total)} busy={busy} onSubmit={checkout} onCancel={() => setPaying(false)} />
       )}
 
       {result && (
