@@ -1,22 +1,91 @@
 # WAF applicatif (Caddy) : seule porte d'entrée de la plateforme.
 # Il relaie vers les services internes et bloque les requêtes manifestement
-# malveillantes (injection SQL, XSS, traversée de répertoire) en 403.
-# Les logs JSON sont envoyés sur stdout, donc collectés par Loki (label waf).
+# malveillantes (injection SQL, XSS, traversée de répertoire, scanners) en 403,
+# limite le débit, et journalise chaque blocage avec un marqueur distinct.
 {
 	admin off
+}
+
+:8080 {
+	# Access log du site : journalise CHAQUE requête (code, URI, et le marqueur
+	# waf_event ajouté par log_append lors d'un blocage). Sans cette directive au
+	# niveau du site, Caddy ne logge que son démarrage, pas les requêtes — c'est
+	# ce qui rendait les blocages invisibles pour le SIEM et le détecteur.
 	log {
 		output stdout
 		format json
 	}
-}
 
-:8080 {
-	# Filtrage applicatif : motifs d'attaque courants -> 403.
-	# On couvre les formes en clair ET encodées (%20, %3Cscript), car l'URI
-	# est brute. Classes POSIX ([[:space:]]) pour éviter les backslashes.
-	@malveillant `{http.request.uri}.matches("(?i)(union([[:space:]]|%20|\\+)+select|or([[:space:]]|%20|\\+)+1=1|(<|%3c)script|([.]|%2e){2}/|/etc/passwd)")`
-	handle @malveillant {
-		respond "Requête bloquée par le WAF" 403
+	# --- En-têtes de sécurité : limitent l'exploitation côté navigateur ---
+	# nosniff empêche le navigateur de deviner un type MIME ; DENY bloque
+	# l'inclusion du site dans une iframe (clickjacking) ; CSP restreint les
+	# sources de contenu (anti-XSS) ; Permissions-Policy coupe caméra/micro/géoloc
+	# côté API ; on retire la bannière Server, qui renseigne sur la techno.
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+		Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	# --- Limite de taille du corps : un payload géant ne peut pas saturer l'API ---
+	request_body {
+		max_size 64KB
+	}
+
+	# --- Limite de débit sur l'authentification (anti-brute-force) ---
+	# 10 tentatives / 10 s par IP sur /auth et /shop/login : le trafic normal reste
+	# loin de cette borne, mais un brute force de mots de passe est freiné (429).
+	# Le reste du trafic (paiements, navigation) n'est PAS limité : la démo et
+	# l'attaque callback passent normalement.
+	@login path /auth/* /shop/login
+	rate_limit @login {
+		zone brute_force {
+			key {remote_host}
+			events 10
+			window 10s
+		}
+	}
+
+	# --- Filtrage applicatif : motifs d'attaque courants -> 403 ---
+	# On inspecte l'URI ET le corps des requêtes (un payload d'injection peut
+	# être dans le body d'un POST, pas seulement dans l'adresse).
+	# Formes en clair ET encodées (%20, %3Cscript). Classes POSIX pour éviter les backslashes.
+	@injection `{http.request.uri}.matches("(?i)(union([[:space:]]|%20|\\+)+select|or([[:space:]]|%20|\\+)+1=1|(<|%3c)script|([.]|%2e){2}/|/etc/passwd|/bin/(ba)?sh|;[[:space:]]*(cat|ls|id|whoami)|169\\.254\\.169\\.254|(https?|file|gopher)://(127\\.|localhost|0\\.0\\.0\\.0))")`
+	@injection_body `{http.request.body}.matches("(?i)(union([[:space:]]|%20)+select|or[[:space:]]+1=1|(<|%3c)script|\\$\\{|/etc/passwd)")`
+	# Scanners et outils d'attaque connus, repérés à leur User-Agent.
+	@scanner header User-Agent *sqlmap*
+	@scanner2 header User-Agent *nikto*
+	@scanner3 header User-Agent *nmap*
+	@scanner4 header User-Agent *masscan*
+
+	handle @injection {
+		# Marqueur "WAF_BLOCK" : rend le blocage repérable dans Loki, distinct des
+		# 403 applicatifs. C'est ce que lira la feature waf_blocks du détecteur.
+		log_append waf_event "WAF_BLOCK injection"
+		respond "Requête bloquée par le WAF (injection)" 403
+	}
+	handle @injection_body {
+		log_append waf_event "WAF_BLOCK injection_body"
+		respond "Requête bloquée par le WAF (injection)" 403
+	}
+	handle @scanner {
+		log_append waf_event "WAF_BLOCK scanner"
+		respond "Requête bloquée par le WAF (scanner)" 403
+	}
+	handle @scanner2 {
+		log_append waf_event "WAF_BLOCK scanner"
+		respond "Requête bloquée par le WAF (scanner)" 403
+	}
+	handle @scanner3 {
+		log_append waf_event "WAF_BLOCK scanner"
+		respond "Requête bloquée par le WAF (scanner)" 403
+	}
+	handle @scanner4 {
+		log_append waf_event "WAF_BLOCK scanner"
+		respond "Requête bloquée par le WAF (scanner)" 403
 	}
 
 	# Service d'authentification.
