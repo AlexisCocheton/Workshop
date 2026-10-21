@@ -98,6 +98,7 @@ Authorization: Bearer $REMEDIATION_TOKEN
   "event": "anomaly",            // ou "recovered"
   "score": 12.4,                 // > 0 = anormal
   "top_features": [{"name": "err_5xx_rate", "value": 8.0, "zscore": 9.1}, ...],
+  "incident": {"category": "service_error", "reason": "...", "suspect_feature": "err_5xx_rate"},
   "timestamp": "2026-10-21T14:03:12+00:00"
 }
 ```
@@ -110,6 +111,33 @@ Authorization: Bearer $REMEDIATION_TOKEN
 | `detector:8000/status` | Dashboard : état (`normal`, `anomaly`, `unknown`, `no_model`), score, features en cause |
 | `assistant:8001/ask` | Dashboard : `POST {"question": "..."}` → `{"answer", "sources"}` |
 | `127.0.0.1:8002/verify` (PC Hôte, hors Docker) | `auth` via `host.docker.internal` : `POST {"username": "..."}` → `{"recognized", "reason"}` |
+
+## Qualification de l'incident (détecteur spécialisé défense)
+
+Quand le détecteur passe en anomalie, il ne dit plus seulement « anomalie » : il **qualifie
+l'incident** par une catégorie, à partir de la feature la plus anormale (le z-score que le
+modèle calcule déjà). Cela permet à la remédiation de choisir la bonne réponse et à
+l'opérateur de comprendre tout de suite à quoi il a affaire.
+
+| Catégorie | Déclenchée par | Sens |
+|---|---|---|
+| `api_down` | l'API ne répond plus (contrôle de santé) | panne de disponibilité, avec ou sans trafic |
+| `app_attack` | pic d'erreurs 4xx ou de blocages WAF | scan, injection, brute force |
+| `dos` | afflux de requêtes (`req_rate`) | déni de service |
+| `service_error` | pic d'erreurs 5xx | panne interne ou vulnérabilité exploitée (ex : callback) |
+| `unknown` | anormal sans feature dominante | à investiguer avant d'agir |
+
+La catégorie est choisie selon la feature **la plus** anormale (pas un ordre fixe) : pendant
+l'exploit du callback, le trafic monte avec les 5xx, mais les 5xx dominent, donc c'est bien
+`service_error` et non `dos`. Le détecteur **ne décide ni n'agit** : il qualifie. La catégorie
+est ajoutée au webhook, au `/status` (champ `incident`) et à l'alerte Telegram.
+
+Côté réponse : l'assistant RAG dispose d'une procédure par catégorie (`docs/reponse-incident.md`),
+pour guider l'opérateur. La riposte active (bloquer la source d'une attaque) est une action **au
+WAF**, décidée par l'humain ou ajoutée au moteur de remédiation (pôle Dev) — jamais par le
+détecteur ni l'assistant.
+
+Qualification testée sans réseau : `tests/test_classify.py`.
 
 ## Alerte Telegram (notification humaine)
 
@@ -335,6 +363,7 @@ Tests sans caméra : `face\.venv\Scripts\python -m pytest tests/test_face.py`.
 | `detector/collect.py` | Enregistre les features dans `data/normal.csv` ou `data/attack.csv` |
 | `detector/train.py` | Entraîne et évalue le modèle |
 | `detector/service.py` | Détection en continu, `/status`, `/metrics`, webhook |
+| `detector/classify.py` | Qualifie l'incident (attaque, panne…) à partir des features |
 | `detector/telegram.py` | Alerte Telegram au changement d'état (optionnelle) |
 | `assistant/rag.py` | Chaîne RAG : documents → passages → LLM |
 | `assistant/service.py` | API `/ask` |

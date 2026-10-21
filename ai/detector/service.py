@@ -28,13 +28,15 @@ from config import (
     REMEDIATION_TOKEN,
     REMEDIATION_URL,
 )
+from detector.classify import classify
 from detector.features import FEATURE_NAMES, api_healthy, fetch_now
 from detector.telegram import send_alert
 
 ANOMALY_SCORE = Gauge("aiops_anomaly_score", "Score du modèle : > 0 = point anormal")
 ANOMALY = Gauge("aiops_anomaly", "1 si une anomalie est déclarée (après debounce), sinon 0")
 
-status = {"state": "starting", "score": None, "api_healthy": None, "values": {}, "top_features": [], "error": None}
+status = {"state": "starting", "score": None, "api_healthy": None, "values": {}, "top_features": [],
+          "incident": None, "error": None}
 
 
 class Debouncer:
@@ -85,6 +87,7 @@ def notify_remediation(event: str):
         "event": event,
         "score": status["score"],
         "top_features": status["top_features"],
+        "incident": status["incident"],  # catégorie de l'incident (attaque, panne…) : aide la remédiation
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
     headers = {"Authorization": f"Bearer {REMEDIATION_TOKEN}"}
@@ -127,19 +130,23 @@ def run_forever():
         # l'API resterait cassée). On ne déclare la reprise que si l'API répond.
         is_anomalous = point_score > 0 or not healthy
         event = debouncer.update(is_anomalous)
+        top_features = explain(model, values)
+        # Si on est en anomalie, on qualifie l'incident (attaque, panne…) ; sinon rien.
+        incident = classify(top_features, healthy) if debouncer.in_anomaly else None
         status.update(
             state="anomaly" if debouncer.in_anomaly else "normal",
             score=round(point_score, 3),
             api_healthy=healthy,
             values=values,
-            top_features=explain(model, values),
+            top_features=top_features,
+            incident=incident,
             error=None,
         )
         ANOMALY_SCORE.set(point_score)
         ANOMALY.set(int(debouncer.in_anomaly))
         if event:
             notify_remediation(event)  # action automatique : redémarrage de l'API (pôle Dev)
-            send_alert(event, status["score"], status["top_features"])  # notification humaine
+            send_alert(event, status["score"], status["top_features"], status["incident"])  # notification humaine
         time.sleep(POLL_SECONDS)
 
 
