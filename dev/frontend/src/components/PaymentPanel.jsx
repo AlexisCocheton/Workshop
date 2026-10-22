@@ -1,62 +1,33 @@
-import { useState } from "react";
 import Card from "./Card.jsx";
-import { payDemo } from "../api.js";
 import { formatAgo } from "../status.js";
 
-// Preuve que le métier fonctionne : lancer une transaction fictive et voir les dernières.
-export default function PaymentPanel({ transactions, onPaid }) {
-  const [result, setResult] = useState(null);
-  const [busy, setBusy] = useState(false);
-
-  async function pay() {
-    setBusy(true);
-    try {
-      const tx = await payDemo();
-      setResult({ ok: true, text: `Transaction acceptée : ${tx.amount.toFixed(2)} ${tx.currency} (id ${tx.id.slice(0, 8)}…)` });
-      onPaid();
-    } catch (error) {
-      setResult({ ok: false, text: `Transaction refusée : ${error.message}` });
-    } finally {
-      setBusy(false);
-    }
-  }
+// Preuve que le métier fonctionne : les vrais achats passés dans la boutique.
+// (On n'affiche plus de transaction fictive ; le trafic de fond du détecteur
+// reste en base mais n'a pas sa place dans la supervision métier.)
+export default function PaymentPanel({ orders }) {
+  // Résumé court des articles d'une commande : « 🍬 Caramel ×2, 🍫 Praline ×1 ».
+  const summarize = (items) =>
+    items.map((i) => `${i.emoji} ${i.name}${i.quantity > 1 ? ` ×${i.quantity}` : ""}`).join(", ");
 
   return (
-    <Card title="Service de paiement">
-      <button
-        onClick={pay}
-        disabled={busy}
-        className="rounded-lg bg-epsi-ink px-4 py-2 font-semibold text-white hover:bg-epsi-ink/85 disabled:opacity-60"
-      >
-        {busy ? "Paiement en cours…" : "Lancer une transaction fictive"}
-      </button>
-      {result && (
-        <p className="mt-3 text-sm font-medium">
-          <span aria-hidden="true" className={result.ok ? "text-status-good" : "text-status-critical"}>
-            {result.ok ? "✔ " : "✖ "}
-          </span>
-          {result.text}
-        </p>
-      )}
-
-      <h3 className="mt-5 text-xs font-semibold uppercase tracking-wide text-slate-500">Dernières transactions</h3>
-      {transactions.length === 0 ? (
-        <p className="mt-2 text-sm text-slate-500">Aucune transaction.</p>
+    <Card title="Achats boutique">
+      <p className="text-xs text-slate-500">Paiements réels confirmés par les clients de la boutique.</p>
+      {orders.length === 0 ? (
+        <p className="mt-3 text-sm text-slate-500">Aucun achat pour l'instant.</p>
       ) : (
-        <ul className="mt-2 divide-y divide-slate-100 text-sm">
-          {transactions.slice(0, 5).map((t) => (
-            <li key={t.id} className="flex items-center justify-between gap-3 py-1.5">
-              <span className="font-mono text-xs text-slate-500">{t.id.slice(0, 8)}</span>
-              {/* Provenance : un achat réel d'un client de la boutique, ou un test lancé ici. */}
-              <span
-                className={`rounded-full px-2 py-0.5 text-xs ${
-                  t.source === "boutique" ? "bg-epsi-accent/30 text-epsi-ink" : "bg-slate-100 text-slate-500"
-                }`}
-              >
-                {t.source === "boutique" ? `🛒 boutique${t.items ? ` · ${t.items} art.` : ""}` : "test"}
-              </span>
-              <span>{t.amount.toFixed(2)} {t.currency}</span>
-              <span className="text-slate-500">{formatAgo(Date.parse(t.created_at))}</span>
+        <ul className="mt-3 divide-y divide-slate-100 text-sm">
+          {orders.slice(0, 5).map((o) => (
+            <li key={o.id} className="flex items-start justify-between gap-3 py-2">
+              <div className="min-w-0">
+                <span className="rounded-full bg-epsi-accent/30 px-2 py-0.5 text-xs text-epsi-ink">
+                  🛒 commande #{String(o.id).slice(0, 8)}
+                </span>
+                <p className="mt-1 truncate text-slate-600" title={summarize(o.items)}>{summarize(o.items)}</p>
+              </div>
+              <div className="shrink-0 text-right">
+                <span className="font-semibold">{o.total.toFixed(2)} €</span>
+                <p className="text-xs text-slate-500">{formatAgo(Date.parse(o.created_at))}</p>
+              </div>
             </li>
           ))}
         </ul>

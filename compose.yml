@@ -92,10 +92,16 @@ services:
       - "3000:3000"
 
   # Boutique de confiseries : site public des clients, séparé du back-office.
-  # Elle n'appelle que le WAF (:8080), comme un vrai client.
+  # Elle n'appelle que le WAF, comme un vrai client.
   shop:
     build: ./dev/shop
     container_name: shop
+    # Adresse du WAF vue par le navigateur du client. Vide : la boutique reprend
+    # l'hôte de la page sur :8080 (défaut d'origine). À définir dans .env quand le
+    # WAF n'est pas sur :8080 ou qu'un autre poste ouvre la boutique à distance
+    # (ex. SHOP_WAF_URL=http://192.168.137.1:18080 pour la démo inter-groupes).
+    environment:
+      VITE_WAF_URL: ${SHOP_WAF_URL:-}
     ports:
       - "3002:3002"
 

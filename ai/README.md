@@ -372,8 +372,12 @@ Tests sans caméra : `face\.venv\Scripts\python -m pytest tests/test_face.py`.
   conteneur compromis (l'API après l'exploit du callback) pourrait remplacer le visage de référence.
 - Seul le vecteur est stocké, jamais la photo. `data/face_encodings/` est exclu de Git
   (donnée biométrique, RGPD art. 9).
-- Les jetons « visage » et « back-office » portent une audience (`aud`) : l'API de paiement
-  les refuse (vérifié), ils ne servent qu'à ce pour quoi ils ont été émis.
+- Les jetons « visage » et « back-office » portent une audience (`aud`). L'API de paiement
+  s'en sert pour cloisonner : un jeton « visage » ou « client » (`customer`) est refusé partout
+  côté paiement (vérifié) ; seul le jeton « back-office » (l'opérateur) et le compte de service
+  du simulateur de trafic peuvent **lire** les paiements (`GET /orders`, `GET /transactions`).
+  Ces deux routes de lecture ne sont donc plus publiques : auparavant ouvertes pour simplifier
+  l'affichage du dashboard, elles exigent désormais un jeton (OWASP A01, « Broken Access Control »).
 - Le compte back-office (`BACKOFFICE_USER`, `admin` par défaut) est distinct du compte client
   `app`, dont le mot de passe est public (il est dans le code du dashboard).
 
