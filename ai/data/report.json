@@ -1,13 +1,13 @@
 {
   "false_positive_rate": 0.0,
-  "recall": 0.944,
+  "recall": 0.917,
   "precision": 1.0,
   "confusion_matrix": {
-    "tn": 59,
+    "tn": 44,
     "fp": 0,
-    "fn": 2,
-    "tp": 34
+    "fn": 3,
+    "tp": 33
   },
-  "n_normal_test": 59,
+  "n_normal_test": 44,
   "n_attack": 36
 }

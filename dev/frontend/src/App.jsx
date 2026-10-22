@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { fetchEvents, fetchOrders, fetchStatus, fetchWafBlocks } from "./api.js";
 import { useFunMode } from "./funMode.js";
 import { formatClock, phaseOf } from "./status.js";
@@ -18,14 +18,17 @@ const WINDOW_MS = 5 * 60 * 1000; // historique gardé pour le graphique : 5 minu
 export default function App() {
   const [token, setToken] = useState(() => sessionStorage.getItem("auth_token"));
 
+  // Stable (useCallback) : les effets du Dashboard qui en dépendent ne se relancent pas à chaque rendu.
+  const logout = useCallback(() => { sessionStorage.removeItem("auth_token"); setToken(null); }, []);
+
   if (!token) {
     return <Login onLogin={(t) => { sessionStorage.setItem("auth_token", t); setToken(t); }} />;
   }
 
-  return <Dashboard onLogout={() => { sessionStorage.removeItem("auth_token"); setToken(null); }} />;
+  return <Dashboard token={token} onLogout={logout} />;
 }
 
-function Dashboard({ onLogout }) {
+function Dashboard({ token, onLogout }) {
   const [status, setStatus] = useState(null);
   const [events, setEvents] = useState([]);
   const [wafBlocks, setWafBlocks] = useState([]);
@@ -67,12 +70,22 @@ function Dashboard({ onLogout }) {
   }, []);
 
   // Toutes les 5 s : derniers achats boutique (preuve que le paiement fonctionne).
+  // Route réservée (jeton opérateur) : si le jeton est refusé (401, expiré), on
+  // cesse d'interroger et on repasse par la connexion, plutôt que de marteler
+  // l'API de 401 — ce bruit de 4xx déclencherait une fausse alerte du détecteur.
   useEffect(() => {
-    const refresh = () => fetchOrders().then(setOrders).catch(() => {});
+    let stop = false;
+    const refresh = () =>
+      fetchOrders().then(setOrders).catch((e) => {
+        if (String(e.message).includes("401")) {
+          stop = true;
+          onLogout();
+        }
+      });
     refresh();
-    const timer = setInterval(refresh, 5000);
+    const timer = setInterval(() => { if (!stop) refresh(); }, 5000);
     return () => clearInterval(timer);
-  }, []);
+  }, [onLogout]);
 
   return (
     <div className="relative min-h-screen bg-epsi-bg text-epsi-ink">
