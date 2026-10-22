@@ -4,7 +4,11 @@ Chaque feature est une requête PromQL (Prometheus) ou LogQL (Loki) qui
 renvoie UN nombre. C'est le seul fichier à adapter quand les pôles Dev et
 Infra fixent les noms réels des métriques et des labels.
 """
+import json
 import math
+import time
+from datetime import datetime, timezone
+from urllib.parse import unquote
 
 import httpx
 
@@ -23,13 +27,13 @@ FEATURES = {
     # l'API elle-même (prometheus_client), plutôt que cAdvisor dont le label
     # `name` est absent sur Docker Desktop/WSL2.
     "api_cpu": ("prometheus", 'sum(rate(process_cpu_seconds_total{job="api"}[30s]))'),
-    # waf_blocks retirée : le filtre Loki `|= "403"` attrapait TOUTE ligne de log
-    # contenant « 403 » (403 applicatifs d'auth, nombres dans un champ…), pas les
-    # blocages du WAF. Non nulle en temps normal, elle cassait l'hypothèse « 0 en
-    # temps normal » du modèle et provoquait des faux positifs. L'attaque applicative
-    # reste vue par err_4xx_rate ; l'incident callback par err_5xx_rate. À réactiver
-    # quand le WAF émettra un marqueur de log distinct des 403 applicatifs (pôle Cyber) :
-    # "waf_blocks": ("loki", 'sum(count_over_time({container="waf"} | json | status="403" [30s]))'),
+    # waf_blocks RÉACTIVÉE. Elle avait été retirée car le filtre `|= "403"` attrapait
+    # toute ligne contenant « 403 » (403 applicatifs d'auth inclus) : non nulle en temps
+    # normal, elle cassait l'hypothèse « 0 en temps normal » du modèle. Le WAF émet
+    # maintenant un marqueur de log DISTINCT à chaque blocage (`log_append waf_event
+    # "WAF_BLOCK …"` dans cyber/waf/Caddyfile) : on compte ce marqueur, jamais présent
+    # dans le trafic normal. La condition posée lors du retrait est donc remplie.
+    "waf_blocks": ("loki", 'sum(count_over_time({container="waf"} |= "WAF_BLOCK" [30s]))'),
 }
 FEATURE_NAMES = list(FEATURES)
 
@@ -68,3 +72,45 @@ def api_healthy() -> bool:
         return httpx.get(API_HEALTH_URL, timeout=3).status_code == 200
     except httpx.HTTPError:
         return False
+
+
+def recent_waf_blocks(limit: int = 15, minutes: int = 10) -> list[dict]:
+    """Dernières requêtes bloquées par le WAF, lues dans les logs (Loki).
+
+    Lecture seule, pour affichage : on extrait de chaque blocage le type (injection,
+    scanner…), l'URL tentée, l'IP source, l'heure. Renvoie [] si Loki ne répond pas
+    ou si rien n'a été bloqué.
+    """
+    end = int(time.time() * 1e9)
+    start = end - minutes * 60 * 10**9
+    try:
+        response = httpx.get(
+            f"{LOKI_URL}/loki/api/v1/query_range",
+            params={"query": '{container="waf"} |= "WAF_BLOCK"', "start": start,
+                    "end": end, "limit": limit, "direction": "backward"},
+            timeout=5,
+        )
+        response.raise_for_status()
+        streams = response.json()["data"]["result"]
+    except (httpx.HTTPError, KeyError):
+        return []
+
+    blocks = []
+    for stream in streams:
+        for timestamp, line in stream["values"]:
+            try:
+                log = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            request = log.get("request", {})
+            blocks.append({
+                # waf_event = « WAF_BLOCK injection » : on garde le mot après WAF_BLOCK (le type).
+                "type": log.get("waf_event", "WAF_BLOCK").replace("WAF_BLOCK", "").strip() or "bloqué",
+                "uri": unquote(request.get("uri", "")),  # dé-encode %20, %3C… pour la lisibilité
+                "client_ip": request.get("client_ip", request.get("remote_ip", "?")),
+                "method": request.get("method", ""),
+                "at": datetime.fromtimestamp(int(timestamp) / 1e9, tz=timezone.utc).isoformat(),
+            })
+    # Loki renvoie par stream : on retrie par heure décroissante et on limite.
+    blocks.sort(key=lambda b: b["at"], reverse=True)
+    return blocks[:limit]
