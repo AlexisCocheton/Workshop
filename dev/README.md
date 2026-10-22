@@ -4,9 +4,40 @@ Les microservices métier et le moteur de reprise.
 
 | Service | Port interne | Rôle |
 |---|---|---|
-| `db` | 5432 | PostgreSQL : `transactions`, `products`, `customers`, `orders`, `order_items` |
-| `auth` | 8100 | Émet un jeton JWT (`POST /login`) ; connexion du back-office |
+| `db` | 5432 | PostgreSQL : `transactions`, `products`, `customers`, `wallet_movements`, `orders`, `order_items` |
+| `auth` | 8100 | Jetons JWT : compte de démonstration (`POST /login`) et connexion du back-office (`/backoffice/*`) ; état de la LED (`GET /led`) |
 | `api` | 8000 | API de paiement : `POST /transactions` (jeton requis), `GET /transactions`, `/metrics`, `/healthz` ; boutique : `/shop/*` |
+
+## Comptes et connexion
+
+| Compte | Où | Identifiants | Jeton obtenu |
+|---|---|---|---|
+| Démonstration | `auth` `POST /login` | `DEMO_USER` / `DEMO_PASSWORD` (`app` / `app`, volontairement publics) | Crée des transactions fictives ; utilisé par le dashboard et `ai/traffic.py` |
+| Back-office | `auth` `POST /backoffice/face` puis `POST /backoffice/login` | `BACKOFFICE_USER` (`admin` par défaut) + visage + `BACKOFFICE_PASSWORD` | Accès au dashboard (audience `backoffice`) |
+| Client boutique | `api` `POST /shop/register`, `POST /shop/login` | E-mail + mot de passe choisis à l'inscription | Audience `customer` : boutique seulement |
+| Marchand | `api` `POST /shop/login` | `SHOP_MERCHANT_EMAIL` / `SHOP_MERCHANT_PASSWORD` | Jeton client + rôle marchand relu en base |
+
+Connexion au back-office : l'identifiant déclenche la caméra du PC Hôte (service `face`) ; un
+visage reconnu donne un « ticket visage » valable 2 minutes, sans lequel le mot de passe est
+refusé. Visage non reconnu : 30 s d'attente (`FACE_RETRY_SECONDS`) ; au 2e échec, compte bloqué
+5 minutes (`BLOCK_SECONDS`). Sans `BACKOFFICE_PASSWORD` dans `.env`, le back-office reste fermé
+(503). `BACKOFFICE_TEST_USER` crée un compte qui saute la caméra, à ne jamais activer en démo.
+Détails : [`ai/README.md`](../ai/README.md), section « Reconnaissance faciale du back-office ».
+
+## Les transactions
+
+Une ligne de `transactions` : `id` (UUID), `amount`, `currency` (`EUR`), `status` (`accepted`),
+`created_at`. Elle naît de trois façons :
+
+| Origine | Route | Remarque |
+|---|---|---|
+| Transaction fictive | `POST /transactions` (jeton de démonstration) | Bouton du dashboard, simulateur de trafic |
+| Recharge de cagnotte | `POST /shop/wallet/topup` | Montant de 1 à 500 € ; la carte n'est pas transmise |
+| Commande boutique | `POST /shop/orders` | Liée à la commande par `orders.transaction_id` |
+
+`GET /transactions` renvoie les 20 dernières, avec `source` (`boutique` si liée à une commande,
+sinon `fictive`), `order_id` et `items` (nombre d'articles). Pendant l'incident, les trois routes
+de création répondent 500 : aucune transaction n'est créée jusqu'au redémarrage de l'`api`.
 | `remediation` | 8200 | Reçoit l'alerte du détecteur (`POST /incident`) et redémarre `api` ; `GET /events` |
 | `frontend` | 3000 | Dashboard / back-office React + Tailwind (voir ci-dessous) |
 | `shop` | 3002 | Boutique de confiseries React + Tailwind, site public des clients (voir ci-dessous) |
@@ -85,6 +116,23 @@ de carte). Adresse, position GPS et horaires se changent dans `shop/src/store.js
 Pour ouvrir la boutique depuis un autre PC du réseau, ajouter son adresse
 (`http://<IP du PC Hôte>:3002`) à `SHOP_ORIGINS` dans `.env` (CORS).
 
+Composants de `shop/src/components/` :
+
+| Composant | Rôle |
+|---|---|
+| `Header` | En-tête, nom de la boutique (`SHOP_NAME`), onglets, solde de la cagnotte, lien « Connexion » |
+| `Home` | Page d'accueil : présentation de la boutique physique |
+| `StoreInfo`, `StoreMap` | Coordonnées, horaires, itinéraire ; mini-carte OpenStreetMap (`react-leaflet`) |
+| `ProductGrid` | Catalogue ; photo du produit, ou emoji à défaut |
+| `Cart`, `QuantityInput` | Panier et saisie de quantité bornée au stock ; paiement avec la cagnotte |
+| `AuthForm` | Connexion ou création de compte client |
+| `Wallet`, `PaymentForm` | Page « Ma cagnotte » : solde, mouvements, recharge par carte |
+| `PaymentPending` | Fenêtre modale pendant un paiement ou un virement (évite le double envoi) |
+| `Orders` | Historique d'achat du client connecté |
+| `Profile`, `ProfileForm`, `PasswordForm` | Page « Mon profil » : informations personnelles et mot de passe |
+| `Merchant` | Espace marchand : stock, ajout et retrait de confiseries |
+| `Savings` | Épargne du marchand et virement vers un IBAN |
+
 ## Le dashboard (`frontend/`)
 
 Conçu pour rendre l'incident lisible **avant, pendant et après**, y compris à distance
@@ -92,14 +140,17 @@ Conçu pour rendre l'incident lisible **avant, pendant et après**, y compris à
 
 | Bloc | Rôle |
 |---|---|
+| `Login` | Connexion au back-office : identifiant → caméra → mot de passe (les règles sont appliquées par `auth`) |
 | `StatusBanner` | Phase en grand : opérationnel → dégradation → incident → reprise → rétabli (avec durée) |
 | `ServiceCards` | État de l'API, du détecteur IA, de la remédiation et du WAF |
 | `Timeline` | Score sur 5 min, seuil, bandes d'incident, repères de remédiation, frise de disponibilité, réticule et vue tableau |
 | `Features` | Pourquoi l'alerte : indicateurs les plus inhabituels (z-score) |
 | `RemediationLog` | Journal des actions du moteur de remédiation |
+| `WafBlocks` | Requêtes bloquées par le WAF (type, méthode et URL tentée, IP source), lues dans Loki via le détecteur |
 | `PaymentPanel` | Transaction de test et dernières transactions (preuve de reprise) |
 | `Assistant` | Questions à l'assistant RAG (lecture seule) |
 | `Friends` | Mode licorne 🦄 : chaton mascotte, décor flottant, licorne qui traverse l'écran à la reprise |
+| `Card` | Cadre commun à tous les blocs |
 
 Le **mode licorne** est activé par défaut et se coupe d'un clic (bouton en haut à droite),
 par exemple pour une présentation sérieuse. Le choix est mémorisé dans le navigateur, et les
