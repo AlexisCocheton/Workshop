@@ -86,11 +86,11 @@ docker compose restart detector
 | `req_rate` | Prometheus, API métier | `http_requests_total` |
 | `err_4xx_rate`, `err_5xx_rate` | Prometheus, API métier | `http_requests_total{status=~"4.."}`, `{status=~"5.."}` |
 | `api_cpu` | Prometheus, API elle-même | `process_cpu_seconds_total{job="api"}` (cAdvisor n'expose pas le label `name` sur Docker Desktop) |
+| `waf_blocks` | Loki, logs du WAF | `count_over_time({container="waf"} \|= "WAF_BLOCK" [30s])` |
 
-> `waf_blocks` a été retirée : le filtre Loki `|= "403"` comptait toute ligne de log contenant
-> « 403 » (403 applicatifs, nombres de champs…), pas les blocages du WAF, et faussait le modèle.
-> À réactiver quand le WAF émettra un marqueur de log propre (pôle Cyber). L'attaque applicative
-> reste vue par `err_4xx_rate`.
+> `waf_blocks` compte le marqueur `WAF_BLOCK` que le WAF ajoute à chaque blocage (pas le simple
+> texte « 403 », qui apparaissait aussi dans des 403 applicatifs et faussait le modèle). Ce marqueur
+> est absent du trafic normal : la feature vaut 0 au repos et monte sur une attaque applicative.
 
 **Ce que l'IA envoie** au moteur de remédiation, à chaque changement d'état :
 
@@ -176,7 +176,7 @@ Si les deux variables sont vides, l'alerte est simplement désactivée : le dét
 
 ## Pour le dossier technique (§3.3)
 
-**Données.** Quatre features mesurées toutes les 5 s (tableau ci-dessus). La collecte utilise
+**Données.** Cinq features mesurées toutes les 5 s (tableau ci-dessus). La collecte utilise
 la même fonction que le service en production (`fetch_now`) : le modèle est entraîné exactement
 sur ce qu'il voit en direct.
 
@@ -208,20 +208,23 @@ IsolationForest ne coupe jamais sur une feature constante pendant l'apprentissag
 donc pas une feature qui vaut toujours 0 en temps normal (erreurs 5xx, blocages WAF), alors que
 c'est précisément ce qui bouge lors d'un incident.
 
-**Résultats sur notre plateforme** (collecte réelle du 2026-10-21 : 239 points de trafic normal
+**Résultats sur notre plateforme** (collecte réelle du 2026-10-22 : 234 points de trafic normal
 en 20 min — cycles calme / montée / palier / descente, de 0,3 à 5,7 req/s, générés par
-`traffic.py`, incluant la navigation sur la boutique `/shop/*` — et 24 points d'attaque callback → 5xx) :
+`traffic.py`, incluant la navigation sur la boutique `/shop/*` — et 36 points d'attaque
+scan + callback, avec blocages WAF) :
 
 | Indicateur | Valeur |
 |---|---|
-| Faux positifs (60 points de trafic normal de test) | 0 % |
+| Faux positifs (59 points de trafic normal de test) | 0 % |
 | Précision | 100 % |
-| Rappel (points d'attaque détectés) | 100 % |
-| Matrice de confusion | TN 60, FP 0, FN 0, TP 24 |
+| Rappel (points d'attaque détectés) | 94,4 % (34/36) |
+| Matrice de confusion | TN 59, FP 0, FN 2, TP 34 |
 | Délai de reprise complète (détection + redémarrage) | ~30 s, nouvelle transaction réussie |
 
-Le modèle a été réentraîné en incluant le trafic de la boutique (ajoutée après la première
-collecte), pour qu'il ne prenne pas une simple visite de la boutique pour une anomalie.
+Le modèle a été réentraîné en incluant le trafic de la boutique et la feature `waf_blocks`
+réactivée (voir `features.py`) : il tolère une simple visite de la boutique, et exploite
+désormais les blocages du WAF comme signal d'attaque. Les 2 points d'attaque ratés sont les
+tout premiers, avant que les fenêtres `rate[30s]` ne montent — absorbés par le debounce.
 
 **Compromis de sensibilité.** Entraîné sur un trafic normal riche, le modèle tolère mieux les
 variations de charge, mais réagit moins aux petits taux d'erreurs : ~5 erreurs 5xx/s sont
