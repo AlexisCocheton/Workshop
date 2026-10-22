@@ -17,6 +17,7 @@ Aucune donnée réelle.
 """
 import hmac
 import os
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -47,6 +48,11 @@ if TEST_USER:
     print(f"[auth] ATTENTION : compte de test {TEST_USER!r} actif, sans reconnaissance faciale", flush=True)
 # Service de reconnaissance faciale, lancé sur le PC Hôte où est branchée la caméra.
 FACE_URL = os.getenv("FACE_URL", "http://host.docker.internal:8002")
+# ESP8266 de la LED, joignable directement sur le point d'accès du groupe. Si défini,
+# auth POUSSE l'événement vers l'ESP à chaque changement d'état (en plus de GET /led,
+# que l'ESP peut aussi interroger). Vide = pas de push, seul le mode « interrogation » sert.
+ESP_LED_URL = os.getenv("ESP_LED_URL", "")  # ex : http://192.168.137.50/api/event
+ESP_LED_TOKEN = os.getenv("ESP_LED_TOKEN", "")  # Bearer éventuel attendu par l'ESP
 
 FACE_TICKET_SECONDS = 120  # temps laissé pour saisir le mot de passe une fois le visage reconnu
 # Attentes imposées par la consigne. Réglables pour les tests (0 = aucune attente),
@@ -78,6 +84,26 @@ led = {"event": None, "at": 0.0, "id": 0}  # id : numéro d'événement, pour qu
 
 def set_led(event: str):
     led.update(event=event, at=time.time(), id=led["id"] + 1)
+    # Push dans un thread : un ESP injoignable ou lent ne doit jamais retarder
+    # ni faire échouer l'authentification (la reconnaissance faciale doit rester fluide).
+    threading.Thread(target=push_led_to_esp, args=(event, led["id"]), daemon=True).start()
+
+
+def push_led_to_esp(event: str, event_id: int):
+    """Pousse l'événement vers l'ESP8266 de la LED (si ESP_LED_URL est défini).
+
+    Appelé à chaque étape de la reconnaissance faciale et du login. L'ESP affiche
+    la couleur correspondante (voir LED_RULES). L'ESP peut aussi interroger GET /led :
+    les deux modes coexistent.
+    """
+    if not ESP_LED_URL:
+        return
+    mode = LED_RULES.get(event, ("off", 0))[0]
+    headers = {"Authorization": f"Bearer {ESP_LED_TOKEN}"} if ESP_LED_TOKEN else {}
+    try:
+        httpx.post(ESP_LED_URL, json={"event": event, "mode": mode, "id": event_id}, headers=headers, timeout=1.5)
+    except httpx.HTTPError as exc:
+        print(f"[auth] LED ESP injoignable ({exc}) — l'ESP peut toujours interroger GET /led", flush=True)
 
 
 class Credentials(BaseModel):

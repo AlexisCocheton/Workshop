@@ -30,6 +30,16 @@ Pourquoi l'ESP interroge le serveur, et pas l'inverse :
 `/auth/led` se lit sans authentification : elle donne la même information que la LED, visible de
 toute la salle, et ne permet aucune action.
 
+### Deux modes possibles
+
+| Mode | Comment | Quand l'utiliser |
+|---|---|---|
+| **Interrogation** (défaut) | L'ESP fait `GET /auth/led` toutes les 300 ms. `auth` n'a rien à configurer. | L'ESP n'expose aucun port ; simple et robuste. |
+| **Poussée** (optionnel) | `auth` envoie un `POST` à l'ESP à chaque étape, si `ESP_LED_URL` est défini (ex : `http://192.168.137.50/api/event`). Corps : `{event, mode, id}`, en-tête `Bearer ESP_LED_TOKEN` si l'ESP l'exige. | Si l'ESP tourne un firmware qui **reçoit** des événements (serveur HTTP sur l'ESP) plutôt que d'interroger. |
+
+Les deux modes coexistent : activer la poussée n'empêche pas l'interrogation. La poussée est
+**non bloquante** (thread séparé) : un ESP injoignable ne ralentit jamais l'authentification.
+
 ## Câblage
 
 ```
