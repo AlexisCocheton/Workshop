@@ -79,6 +79,20 @@ LED_RULES = {  # événement -> (mode de la LED, durée d'affichage en secondes)
     "password_bad": ("red_blink", 6),  # l'ESP fait exactement 10 clignotements (5 s)
     "face_bad": ("red", 30),
 }
+# Traduction de nos événements vers l'API de l'ESP8266 (firmware de l'équipe IoT) :
+# son API attend {event: "<mode>", duration: <s>}, avec les modes green_blink,
+# green_fixed, red_blink, red_fixed. Les modes fixes s'éteignent seuls après `duration`.
+# Les modes clignotants du firmware clignotent EN CONTINU (ils ne comptent pas) :
+# pour le rouge, la consigne impose « 10 fois puis éteint », donc auth éteint la
+# LED (`off`) après `stop_after` secondes (10 clignotements ≈ 5 s).
+#   notre événement -> (event ESP, duration fixe en s | None, extinction après N s | None)
+ESP_LED_EVENTS = {
+    "face_ok": ("green_blink", None, None),    # visage reconnu : vert clignotant jusqu'à la suite
+    "login_ok": ("green_fixed", 30, None),     # mot de passe validé : vert fixe 30 s (s'éteint seul)
+    "password_bad": ("red_blink", None, 5),    # mot de passe faux : rouge clignotant, éteint après ~10 clignotements
+    "face_bad": ("red_fixed", 30, None),       # visage non reconnu : rouge fixe 30 s (s'éteint seul)
+}
+BLINK_SECONDS = 0.5  # durée d'un clignotement du firmware (pour calculer les 10 fois)
 led = {"event": None, "at": 0.0, "id": 0}  # id : numéro d'événement, pour que l'ESP voie un nouvel échec
 
 
@@ -92,18 +106,33 @@ def set_led(event: str):
 def push_led_to_esp(event: str, event_id: int):
     """Pousse l'événement vers l'ESP8266 de la LED (si ESP_LED_URL est défini).
 
-    Appelé à chaque étape de la reconnaissance faciale et du login. L'ESP affiche
-    la couleur correspondante (voir LED_RULES). L'ESP peut aussi interroger GET /led :
-    les deux modes coexistent.
+    Appelé à chaque étape de la reconnaissance faciale et du login (voir ESP_LED_EVENTS).
+    Le rouge clignotant est éteint après 10 clignotements (consigne). L'ESP peut aussi
+    interroger GET /led : les deux modes coexistent. Tourne dans un thread : ne bloque pas l'auth.
     """
-    if not ESP_LED_URL:
+    if not ESP_LED_URL or event not in ESP_LED_EVENTS:
         return
-    mode = LED_RULES.get(event, ("off", 0))[0]
+    esp_event, duration, stop_after = ESP_LED_EVENTS[event]
     headers = {"Authorization": f"Bearer {ESP_LED_TOKEN}"} if ESP_LED_TOKEN else {}
-    try:
-        httpx.post(ESP_LED_URL, json={"event": event, "mode": mode, "id": event_id}, headers=headers, timeout=1.5)
-    except httpx.HTTPError as exc:
-        print(f"[auth] LED ESP injoignable ({exc}) — l'ESP peut toujours interroger GET /led", flush=True)
+
+    def send(body):
+        try:
+            httpx.post(ESP_LED_URL, json=body, headers=headers, timeout=1.5)
+        except httpx.HTTPError as exc:
+            print(f"[auth] LED ESP injoignable ({exc}) — l'ESP peut toujours interroger GET /led", flush=True)
+
+    body = {"event": esp_event}
+    if duration is not None:  # les modes fixes ont une durée ; les clignotants non
+        body["duration"] = duration
+    send(body)
+
+    # Rouge clignotant : le firmware clignote en continu, on l'éteint après 10 clignotements
+    # (consigne : « clignote en rouge 10 fois puis s'éteint »). On n'éteint que si aucun
+    # nouvel événement n'est survenu entre-temps (sinon on couperait la couleur suivante).
+    if stop_after is not None:
+        time.sleep(stop_after)
+        if led["id"] == event_id:  # aucun nouvel événement depuis : on peut éteindre
+            send({"event": "off"})
 
 
 class Credentials(BaseModel):
