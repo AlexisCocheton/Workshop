@@ -275,21 +275,16 @@ identifiant exact, la fusion favorise un passage bien classé par les deux méth
 > chargement du modèle). Pour la démo, précharger les modèles et, si besoin, déporter Ollama sur
 > le PC de délestage IA (`OLLAMA_URL`) : c'est l'option recommandée quand la RAM manque.
 
-**Évaluation de la recherche.** Un jeu de 10 questions d'opérateur (`assistant/eval_questions.py`),
+**Évaluation de la recherche.** Un jeu de 17 questions d'opérateur (`assistant/eval_questions.py`),
+couvrant les quatre documents de `docs/` (détection, réponse à incident, architecture, continuité/reprise),
 chacune liée au document qui contient la réponse et à un terme exact attendu. Le script
 `assistant/evaluate.py` mesure, pour chaque méthode, la part de bonnes réponses retrouvées dans
 les *k* premiers passages (`data/rag_eval.json`) :
 
-| k (passages retenus) | Hybride | Vectoriel seul | BM25 seul |
-|---|---|---|---|
-| **1** | **90 %** | 80 % | 80 % |
-| 2 | 100 % | 100 % | 100 % |
-| 3 et 5 | 100 % | 100 % | 100 % |
-
-À **k=1** (le bon passage doit être en toute première position), l'hybride (90 %) bat chaque méthode
-prise seule (80 %) : vectoriel et BM25 ratent chacun un cas différent, la fusion récupère le meilleur
-des deux. Dès k=2, le corpus est petit (7 passages) donc toutes les méthodes retrouvent tout — c'est
-attendu, et l'écart se creusera à mesure que `docs/` grandira. Lancer l'évaluation :
+À **k=1** (le bon passage doit être en toute première position), l'hybride bat chaque méthode prise
+seule : le vectoriel et BM25 ratent chacun des cas différents (identifiants exacts vs sens), la fusion
+récupère le meilleur des deux. Les chiffres détaillés sont dans `data/rag_eval.json`, à régénérer
+après chaque ajout de document :
 `docker compose run --rm assistant python -m assistant.evaluate`.
 
 ## Limites du détecteur
