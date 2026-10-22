@@ -10,10 +10,14 @@ export const DETECTOR = import.meta.env.VITE_DETECTOR_URL || `http://${HOST}:800
 export const REMEDIATION = import.meta.env.VITE_REMEDIATION_URL || `http://${HOST}:8200`;
 export const ASSISTANT = import.meta.env.VITE_ASSISTANT_URL || `http://${HOST}:8001`;
 
-// Compte de démonstration public (voir .env.example) : il ne peut que créer
-// des transactions fictives.
-const DEMO_ACCOUNT = { user: "app", password: "app" };
 const JSON_HEADERS = { "Content-Type": "application/json" };
+
+// Jeton du back-office (posé à la connexion). Lire les paiements est une action
+// réservée : l'API exige ce jeton, le dashboard le présente donc comme un opérateur.
+const authHeader = () => {
+  const token = sessionStorage.getItem("auth_token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
 async function getJson(url, options) {
   const response = await fetch(url, options);
@@ -23,21 +27,9 @@ async function getJson(url, options) {
 
 export const fetchStatus = () => getJson(`${DETECTOR}/status`);
 export const fetchEvents = () => getJson(`${REMEDIATION}/events`);
-export const fetchTransactions = () => getJson(`${WAF}/transactions`);
+// Vrais achats boutique affichés dans le back-office (plus de transaction fictive).
+export const fetchOrders = () => getJson(`${WAF}/orders`, { headers: authHeader() });
 export const fetchWafBlocks = () => getJson(`${DETECTOR}/waf/blocks`);
-
-export async function payDemo() {
-  const { token } = await getJson(`${WAF}/auth/login`, {
-    method: "POST",
-    headers: JSON_HEADERS,
-    body: JSON.stringify(DEMO_ACCOUNT),
-  });
-  return getJson(`${WAF}/transactions`, {
-    method: "POST",
-    headers: { ...JSON_HEADERS, Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ amount: 42.5, currency: "EUR" }),
-  });
-}
 
 // Back-office : connexion en deux étapes (visage puis mot de passe), via le WAF.
 // On renvoie aussi le code HTTP : un refus (401, 429, 503) porte un message à afficher.

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchEvents, fetchStatus, fetchTransactions, fetchWafBlocks } from "./api.js";
+import { fetchEvents, fetchOrders, fetchStatus, fetchWafBlocks } from "./api.js";
 import { useFunMode } from "./funMode.js";
 import { formatClock, phaseOf } from "./status.js";
 import Assistant from "./components/Assistant.jsx";
@@ -29,7 +29,7 @@ function Dashboard({ onLogout }) {
   const [status, setStatus] = useState(null);
   const [events, setEvents] = useState([]);
   const [wafBlocks, setWafBlocks] = useState([]);
-  const [transactions, setTransactions] = useState([]);
+  const [orders, setOrders] = useState([]);
   const [history, setHistory] = useState([]);
   const [updatedAt, setUpdatedAt] = useState(null);
   const [fun, setFun] = useFunMode();
@@ -66,11 +66,11 @@ function Dashboard({ onLogout }) {
     return () => clearInterval(timer);
   }, []);
 
-  // Toutes les 5 s : dernières transactions (preuve que le paiement fonctionne).
-  const refreshTransactions = () => fetchTransactions().then(setTransactions).catch(() => {});
+  // Toutes les 5 s : derniers achats boutique (preuve que le paiement fonctionne).
   useEffect(() => {
-    refreshTransactions();
-    const timer = setInterval(refreshTransactions, 5000);
+    const refresh = () => fetchOrders().then(setOrders).catch(() => {});
+    refresh();
+    const timer = setInterval(refresh, 5000);
     return () => clearInterval(timer);
   }, []);
 
@@ -122,7 +122,7 @@ function Dashboard({ onLogout }) {
 
         <div className="grid gap-5 lg:grid-cols-2">
           <WafBlocks blocks={wafBlocks} />
-          <PaymentPanel transactions={transactions} onPaid={refreshTransactions} />
+          <PaymentPanel orders={orders} />
         </div>
 
         <div className="grid gap-5 lg:grid-cols-2">

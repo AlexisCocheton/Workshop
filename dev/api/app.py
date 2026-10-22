@@ -170,11 +170,23 @@ def create_merchant(conn: psycopg.Connection):
     )
 
 
+# Jetons admis sur les routes paiement : l'opérateur du back-office (aud
+# « backoffice ») et le compte de service du simulateur de trafic (sans audience).
+# On exclut ainsi un jeton client (aud « customer ») ou un ticket visage (« face »),
+# qui n'ont pas à lire les paiements.
+PAYMENT_AUDIENCES = {None, "backoffice"}
+
+
 def require_token(credentials: HTTPAuthorizationCredentials = Depends(bearer)):
     try:
-        jwt.decode(credentials.credentials, JWT_SECRET, algorithms=["HS256"])
+        # verify_aud=False : on décode d'abord, puis on contrôle l'audience nous-mêmes
+        # (PyJWT, sans audience attendue, refuserait tout jeton qui en porte une).
+        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=["HS256"],
+                             options={"verify_aud": False})
     except jwt.InvalidTokenError:
         raise HTTPException(401, "jeton invalide")
+    if payload.get("aud") not in PAYMENT_AUDIENCES:
+        raise HTTPException(403, "ce jeton n'autorise pas l'accès aux paiements")
 
 
 class TransactionIn(BaseModel):
@@ -204,7 +216,7 @@ def create_transaction(tx: TransactionIn, _=Depends(require_token)):
 
 
 @app.get("/transactions")
-def list_transactions():
+def list_transactions(_=Depends(require_token)):
     # LEFT JOIN sur orders : une transaction née d'un achat boutique y est liée
     # (orders.transaction_id), une transaction fictive du dashboard ne l'est pas.
     # On en déduit la provenance et, pour un achat, le nombre d'articles commandés.
@@ -226,6 +238,30 @@ def list_transactions():
         }
         for r in rows
     ]
+
+
+@app.get("/orders")
+def list_shop_orders(_=Depends(require_token)):
+    """Vrais achats boutique, pour le back-office : articles, total, date, statut.
+
+    Réservé à un porteur de jeton valide (le dashboard envoie son jeton
+    back-office) : lire les paiements est une action métier, pas une donnée
+    publique (OWASP A01). On n'expose en plus aucune donnée nominative du
+    client : la supervision n'en a pas besoin (sujet §5)."""
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT o.id, o.total, o.status, o.created_at, p.name, p.emoji, i.quantity, i.unit_price "
+            "FROM orders o JOIN order_items i ON i.order_id = o.id JOIN products p ON p.id = i.product_id "
+            "ORDER BY o.created_at DESC, o.id DESC, p.name LIMIT 100"
+        ).fetchall()
+    orders = {}  # regroupe les lignes par commande, la plus récente d'abord
+    for order_id, total, status, created_at, name, emoji, quantity, unit_price in rows:
+        order = orders.setdefault(order_id, {
+            "id": order_id, "total": float(total), "status": status,
+            "created_at": created_at.isoformat(), "items": [],
+        })
+        order["items"].append({"name": name, "emoji": emoji, "quantity": quantity, "unit_price": float(unit_price)})
+    return list(orders.values())
 
 
 @app.post("/pay/callback")

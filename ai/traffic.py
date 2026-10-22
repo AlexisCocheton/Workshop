@@ -35,7 +35,8 @@ def send_one(client: httpx.Client, target: str, token: str):
         amount = round(random.uniform(5, 500), 2)
         client.post(f"{target}/transactions", json={"amount": amount}, headers={"Authorization": f"Bearer {token}"})
     elif draw < 0.55:
-        client.get(f"{target}/transactions")
+        # Lire le flux des paiements exige un jeton (comme le back-office) : on réutilise le même.
+        client.get(f"{target}/transactions", headers={"Authorization": f"Bearer {token}"})
     else:
         # Boutique : surtout de la consultation de produits, parfois une commande.
         client.get(f"{target}/shop/products")
