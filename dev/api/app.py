@@ -172,13 +172,25 @@ def create_transaction(tx: TransactionIn, _=Depends(require_token)):
 
 @app.get("/transactions")
 def list_transactions():
+    # LEFT JOIN sur orders : une transaction née d'un achat boutique y est liée
+    # (orders.transaction_id), une transaction fictive du dashboard ne l'est pas.
+    # On en déduit la provenance et, pour un achat, le nombre d'articles commandés.
     with connect() as conn:
         rows = conn.execute(
-            "SELECT id, amount, currency, status, created_at "
-            "FROM transactions ORDER BY created_at DESC LIMIT 20"
+            "SELECT t.id, t.amount, t.currency, t.status, t.created_at, o.id, "
+            "       (SELECT COALESCE(SUM(quantity), 0) FROM order_items WHERE order_id = o.id) "
+            "FROM transactions t LEFT JOIN orders o ON o.transaction_id = t.id "
+            "ORDER BY t.created_at DESC LIMIT 20"
         ).fetchall()
     return [
-        {"id": r[0], "amount": float(r[1]), "currency": r[2], "status": r[3], "created_at": r[4].isoformat()}
+        {
+            "id": r[0], "amount": float(r[1]), "currency": r[2], "status": r[3],
+            "created_at": r[4].isoformat(),
+            # Provenance visible pour l'opérateur : achat client (boutique) ou test (dashboard).
+            "source": "boutique" if r[5] else "fictive",
+            "order_id": r[5],
+            "items": int(r[6]) if r[5] else None,
+        }
         for r in rows
     ]
 

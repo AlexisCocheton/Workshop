@@ -45,8 +45,16 @@ export default function PaymentPanel({ transactions, onPaid }) {
       ) : (
         <ul className="mt-2 divide-y divide-slate-100 text-sm">
           {transactions.slice(0, 5).map((t) => (
-            <li key={t.id} className="flex justify-between gap-3 py-1.5">
+            <li key={t.id} className="flex items-center justify-between gap-3 py-1.5">
               <span className="font-mono text-xs text-slate-500">{t.id.slice(0, 8)}</span>
+              {/* Provenance : un achat réel d'un client de la boutique, ou un test lancé ici. */}
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs ${
+                  t.source === "boutique" ? "bg-epsi-accent/30 text-epsi-ink" : "bg-slate-100 text-slate-500"
+                }`}
+              >
+                {t.source === "boutique" ? `🛒 boutique${t.items ? ` · ${t.items} art.` : ""}` : "test"}
+              </span>
               <span>{t.amount.toFixed(2)} {t.currency}</span>
               <span className="text-slate-500">{formatAgo(Date.parse(t.created_at))}</span>
             </li>
