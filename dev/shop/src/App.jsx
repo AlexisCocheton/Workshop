@@ -42,6 +42,16 @@ export default function App() {
       .then((list) => {
         setProducts(list);
         setLoadError(null);
+        // Le panier sauvegardé peut dépasser un stock qui a baissé depuis : on le ramène au stock.
+        const stock = Object.fromEntries(list.map((p) => [p.id, p.stock]));
+        setCart((current) => {
+          const next = {};
+          for (const [id, quantity] of Object.entries(current)) {
+            const capped = Math.min(quantity, stock[id] ?? 0);
+            if (capped > 0) next[id] = capped;
+          }
+          return next;
+        });
       })
       .catch((error) => setLoadError(error.message));
   }

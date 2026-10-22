@@ -1,12 +1,13 @@
 import { useState } from "react";
 import AuthForm from "./AuthForm.jsx";
 import PaymentForm from "./PaymentForm.jsx";
+import QuantityInput from "./QuantityInput.jsx";
 import { euros, placeOrder } from "../api.js";
 
 // Panier et paiement. Le total affiché est indicatif : l'API recalcule avec ses propres prix.
 export default function Cart({ products, cart, onQuantity, session, onLogin, onExpired, onOrdered }) {
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState(null); // { ok, text }
+  const [result, setResult] = useState(null); // succès : { ok, order, payment } ; échec : { ok, text }
   const [paying, setPaying] = useState(false); // formulaire de carte affiché
 
   const lines = products.filter((p) => cart[p.id]).map((p) => ({ ...p, quantity: cart[p.id] }));
@@ -19,10 +20,7 @@ export default function Cart({ products, cart, onQuantity, session, onLogin, onE
     setResult(null);
     try {
       const order = await placeOrder(session.token, cart);
-      setResult({
-        ok: true,
-        text: `Commande payée : ${euros(order.total)} avec ${payment.brand} •••• ${payment.last4} (n° ${order.id.slice(0, 8)}). Livraison : ${payment.address.street}, ${payment.address.postalCode} ${payment.address.city}. Reçu envoyé à ${payment.email}. Merci !`,
-      });
+      setResult({ ok: true, order, payment });
       setPaying(false);
       onOrdered();
     } catch (error) {
@@ -49,7 +47,8 @@ export default function Cart({ products, cart, onQuantity, session, onLogin, onE
               <span className="flex-1">{line.name}</span>
               <button aria-label={`Retirer un ${line.name}`} className="h-7 w-7 rounded-full bg-candy-light font-bold"
                 onClick={() => onQuantity(line.id, line.quantity - 1)}>−</button>
-              <span className="w-6 text-center">{line.quantity}</span>
+              <QuantityInput quantity={line.quantity} stock={line.stock} label={line.name}
+                onChange={(quantity) => onQuantity(line.id, quantity)} />
               <button aria-label={`Ajouter un ${line.name}`} className="h-7 w-7 rounded-full bg-candy-light font-bold disabled:opacity-40"
                 disabled={line.quantity >= line.stock} onClick={() => onQuantity(line.id, line.quantity + 1)}>+</button>
             </li>
@@ -77,12 +76,52 @@ export default function Cart({ products, cart, onQuantity, session, onLogin, onE
         <PaymentForm amountLabel={euros(total)} busy={busy} onSubmit={checkout} onCancel={() => setPaying(false)} />
       )}
 
-      {result && (
-        <p role="status" className={`mt-3 text-sm font-medium ${result.ok ? "text-green-700" : "text-red-700"}`}>
-          <span aria-hidden="true">{result.ok ? "✔ " : "✖ "}</span>
+      {result?.ok && <Receipt order={result.order} payment={result.payment} />}
+      {result && !result.ok && (
+        <p role="status" className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+          <span aria-hidden="true">✖ </span>
           {result.text}
         </p>
       )}
     </aside>
+  );
+}
+
+// Reçu affiché après un paiement réussi.
+function Receipt({ order, payment }) {
+  const { street, postalCode, city } = payment.address;
+  return (
+    <div role="status" className="mt-4 overflow-hidden rounded-xl border border-green-200 bg-green-50 text-sm">
+      <div className="flex items-center gap-3 bg-green-600 px-4 py-3 text-white">
+        <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-lg font-bold text-green-600">✓</span>
+        <div>
+          <p className="font-bold">Commande payée</p>
+          <p className="text-xs text-white/85">Merci pour votre achat !</p>
+        </div>
+      </div>
+
+      <p className="flex items-baseline justify-between border-b border-dashed border-green-200 px-4 py-3">
+        <span className="text-candy-ink/70">Montant</span>
+        <span className="text-xl font-bold text-candy-ink">{euros(order.total)}</span>
+      </p>
+
+      <dl className="space-y-2 px-4 py-3 text-candy-ink">
+        <ReceiptRow label="Commande">
+          <span className="rounded bg-white px-1.5 py-0.5 font-mono text-xs">n° {order.id.slice(0, 8)}</span>
+        </ReceiptRow>
+        <ReceiptRow label="Carte">{payment.brand} •••• {payment.last4}</ReceiptRow>
+        <ReceiptRow label="Livraison">{street}<br />{postalCode} {city}</ReceiptRow>
+        <ReceiptRow label="Reçu envoyé à"><span className="break-all">{payment.email}</span></ReceiptRow>
+      </dl>
+    </div>
+  );
+}
+
+function ReceiptRow({ label, children }) {
+  return (
+    <div className="flex justify-between gap-4">
+      <dt className="shrink-0 text-candy-ink/60">{label}</dt>
+      <dd className="text-right font-medium">{children}</dd>
+    </div>
   );
 }
