@@ -40,6 +40,10 @@ services:
       BACKOFFICE_TEST_USER: ${BACKOFFICE_TEST_USER:-}
       # Reconnaissance faciale : lancée sur le PC Hôte (caméra USB), hors Docker. Voir ai/README.md.
       FACE_URL: ${FACE_URL:-http://host.docker.internal:8002}
+      # ESP8266 de la LED (optionnel) : si défini, auth pousse l'événement vers l'ESP à chaque
+      # étape (visage reconnu, mot de passe…). Vide = l'ESP interroge GET /auth/led. Voir iot/.
+      ESP_LED_URL: ${ESP_LED_URL:-}
+      ESP_LED_TOKEN: ${ESP_LED_TOKEN:-}
       DASHBOARD_ORIGINS: ${DASHBOARD_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
     extra_hosts:
       - "host.docker.internal:host-gateway"  # déjà fourni par Docker Desktop ; nécessaire sous Linux
