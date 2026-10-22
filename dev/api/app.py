@@ -103,6 +103,11 @@ ALTER TABLE customers ADD COLUMN IF NOT EXISTS street TEXT NOT NULL DEFAULT '';
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS postal_code TEXT NOT NULL DEFAULT '';
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS city TEXT NOT NULL DEFAULT '';
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS is_merchant BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS balance NUMERIC(10, 2) NOT NULL DEFAULT 0 CHECK (balance >= 0);
+CREATE TABLE IF NOT EXISTS wallet_movements (
+    id SERIAL PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id),
+    kind TEXT NOT NULL, amount NUMERIC(10, 2) NOT NULL, label TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS orders (
     id TEXT PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id),
     transaction_id TEXT NOT NULL REFERENCES transactions(id), total NUMERIC(10, 2) NOT NULL,
@@ -149,7 +154,10 @@ def init_db():
 
 
 def create_merchant(conn: psycopg.Connection):
-    """Crée le compte marchand défini dans .env, ou lui redonne son rôle et son mot de passe."""
+    """Crée le compte marchand défini dans .env, ou lui redonne son rôle et son mot de passe.
+    Un seul marchand : les comptes créés avec une ancienne valeur de .env perdent le rôle
+    (sinon ils gardent l'accès à l'espace marchand, et une épargne qui ne reçoit rien)."""
+    conn.execute("UPDATE customers SET is_merchant = false WHERE is_merchant AND email <> %s", (MERCHANT_EMAIL,))
     if not (MERCHANT_EMAIL and MERCHANT_PASSWORD):
         return
     if len(MERCHANT_PASSWORD) < 8:
@@ -297,6 +305,16 @@ class OrderIn(BaseModel):
     items: list[OrderItemIn]
 
 
+class TopUpIn(BaseModel):
+    amount: float
+
+
+class PayoutIn(BaseModel):
+    amount: float
+    iban: str
+    holder: str
+
+
 class RestockIn(BaseModel):
     quantity: int
 
@@ -438,6 +456,67 @@ def change_password(body: PasswordIn, customer_id: int = Depends(require_custome
     return {"ok": True}
 
 
+# --- Cagnotte ------------------------------------------------------------------
+# Chaque compte a un solde (customers.balance, jamais négatif) et un journal des
+# mouvements. Le client la recharge par carte et paie ses commandes avec ; chaque
+# vente crédite l'épargne du marchand, qui la vire ensuite vers son compte bancaire.
+
+MAX_TOPUP = 500  # € par recharge
+MOVEMENTS_SHOWN = 50
+
+
+def record_movement(conn: psycopg.Connection, customer_id: int, kind: str, amount, label: str):
+    conn.execute(
+        "INSERT INTO wallet_movements (customer_id, kind, amount, label) VALUES (%s, %s, %s, %s)",
+        (customer_id, kind, amount, label),
+    )
+
+
+def read_wallet(conn: psycopg.Connection, customer_id: int) -> dict:
+    balance, merchant = conn.execute(
+        "SELECT balance, is_merchant FROM customers WHERE id = %s", (customer_id,)
+    ).fetchone()
+    rows = conn.execute(
+        "SELECT kind, amount, label, created_at FROM wallet_movements WHERE customer_id = %s "
+        "ORDER BY id DESC LIMIT %s",
+        (customer_id, MOVEMENTS_SHOWN),
+    ).fetchall()
+    return {
+        "balance": float(balance),
+        "merchant": merchant,  # le site s'aligne dessus si le rôle a changé depuis la connexion
+        "movements": [
+            {"kind": kind, "amount": float(amount), "label": label, "created_at": created_at.isoformat()}
+            for kind, amount, label, created_at in rows
+        ],
+    }
+
+
+@app.get("/shop/wallet")
+def get_wallet(customer_id: int = Depends(require_customer)):
+    """Solde et derniers mouvements du compte connecté (cagnotte, ou épargne du marchand)."""
+    with connect() as conn:
+        return read_wallet(conn, customer_id)
+
+
+@app.post("/shop/wallet/topup")
+def top_up(body: TopUpIn, customer_id: int = Depends(require_customer)):
+    """Recharge par carte. La carte n'est pas transmise (boutique fictive) ; la recharge
+    crée une transaction, vue par le dashboard, et échoue pendant l'incident."""
+    if state["broken"]:
+        raise HTTPException(500, "erreur interne du service de paiement")
+    amount = round(body.amount, 2)
+    if not 1 <= amount <= MAX_TOPUP:
+        raise HTTPException(422, f"recharge entre 1 et {MAX_TOPUP} €")
+    with connect() as conn, conn.transaction():
+        conn.execute(
+            "INSERT INTO transactions (id, amount, currency, status) VALUES (%s, %s, 'EUR', 'accepted')",
+            (str(uuid.uuid4()), amount),
+        )
+        conn.execute("UPDATE customers SET balance = balance + %s WHERE id = %s", (amount, customer_id))
+        record_movement(conn, customer_id, "topup", amount, "Recharge par carte")
+        return read_wallet(conn, customer_id)
+
+
 @app.post("/shop/orders")
 def create_order(body: OrderIn, customer_id: int = Depends(require_customer)):
     # Pendant l'incident, le paiement échoue comme /transactions : c'est ce que
@@ -448,7 +527,8 @@ def create_order(body: OrderIn, customer_id: int = Depends(require_customer)):
     if not body.items or any(item.quantity < 1 for item in body.items) or len(set(product_ids)) != len(product_ids):
         raise HTTPException(422, "panier vide, quantité invalide ou produit en double")
     order_id, tx_id = str(uuid.uuid4()), str(uuid.uuid4())
-    # Une seule transaction SQL : si un produit manque, rien n'est débité ni enregistré.
+    # Une seule transaction SQL : si un produit manque ou si la cagnotte ne suffit pas,
+    # rien n'est débité ni enregistré.
     with connect() as conn, conn.transaction():
         total, lines = 0, []
         for item in body.items:
@@ -462,6 +542,22 @@ def create_order(body: OrderIn, customer_id: int = Depends(require_customer)):
                 raise HTTPException(409, f"produit {item.product_id} introuvable ou stock insuffisant")
             total += row[0] * item.quantity
             lines.append((order_id, item.product_id, item.quantity, row[0]))
+        # Débit de la cagnotte, vérifié et appliqué en une requête (pas de solde négatif).
+        debited = conn.execute(
+            "UPDATE customers SET balance = balance - %s WHERE id = %s AND balance >= %s RETURNING balance",
+            (total, customer_id, total),
+        ).fetchone()
+        if debited is None:
+            raise HTTPException(402, f"cagnotte insuffisante : il faut {total} € (rechargez votre cagnotte)")
+        label = f"Commande n° {order_id[:8]}"
+        record_movement(conn, customer_id, "purchase", -total, label)
+        # Le marchand est crédité dans la même transaction : l'argent ne se perd ni ne se crée.
+        merchant = conn.execute(
+            "SELECT id FROM customers WHERE email = %s AND is_merchant", (MERCHANT_EMAIL,)
+        ).fetchone()
+        if merchant:
+            conn.execute("UPDATE customers SET balance = balance + %s WHERE id = %s", (total, merchant[0]))
+            record_movement(conn, merchant[0], "sale", total, label)
         conn.execute(
             "INSERT INTO transactions (id, amount, currency, status) VALUES (%s, %s, 'EUR', 'accepted')",
             (tx_id, total),
@@ -475,7 +571,8 @@ def create_order(body: OrderIn, customer_id: int = Depends(require_customer)):
                 "INSERT INTO order_items (order_id, product_id, quantity, unit_price) VALUES (%s, %s, %s, %s)",
                 line,
             )
-    return {"id": order_id, "transaction_id": tx_id, "total": float(total), "status": "paid"}
+    return {"id": order_id, "transaction_id": tx_id, "total": float(total), "status": "paid",
+            "balance": float(debited[0])}
 
 
 @app.get("/shop/orders")
@@ -562,3 +659,33 @@ def delete_product(product_id: int, _=Depends(require_merchant)):
     if row is None:
         raise HTTPException(404, "produit introuvable")
     return product_dict(row)
+
+
+def normalize_iban(iban: str) -> str:
+    """IBAN sans espaces, en majuscules, validé par sa clé (ISO 13616, modulo 97)."""
+    iban = "".join(iban.split()).upper()
+    if not (15 <= len(iban) <= 34 and iban[:2].isalpha() and iban[2:4].isdigit() and iban.isalnum() and iban.isascii()):
+        raise HTTPException(422, "IBAN invalide")
+    digits = "".join(str(int(c, 36)) for c in iban[4:] + iban[:4])
+    if int(digits) % 97 != 1:
+        raise HTTPException(422, "IBAN invalide (clé de contrôle)")
+    return iban
+
+
+@app.post("/shop/merchant/payout")
+def payout(body: PayoutIn, merchant_id: int = Depends(require_merchant)):
+    """Virement de l'épargne du marchand vers son compte bancaire (fictif : rien ne part).
+    Seuls le titulaire et les 4 derniers caractères de l'IBAN sont gardés dans le journal."""
+    iban, holder, amount = normalize_iban(body.iban), body.holder.strip(), round(body.amount, 2)
+    if not holder or len(holder) > 80:
+        raise HTTPException(422, "titulaire du compte requis (80 caractères maximum)")
+    if amount < 0.01:
+        raise HTTPException(422, "montant invalide")
+    with connect() as conn, conn.transaction():
+        if conn.execute(
+            "UPDATE customers SET balance = balance - %s WHERE id = %s AND balance >= %s RETURNING balance",
+            (amount, merchant_id, amount),
+        ).fetchone() is None:
+            raise HTTPException(409, "épargne insuffisante pour ce virement")
+        record_movement(conn, merchant_id, "payout", -amount, f"Virement vers {holder} ({iban[:4]} •••• {iban[-4:]})")
+        return read_wallet(conn, merchant_id)

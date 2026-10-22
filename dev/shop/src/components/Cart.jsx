@@ -1,27 +1,25 @@
 import { useState } from "react";
 import AuthForm from "./AuthForm.jsx";
-import PaymentForm from "./PaymentForm.jsx";
+import PaymentPending, { withMinDelay } from "./PaymentPending.jsx";
 import QuantityInput from "./QuantityInput.jsx";
 import { euros, placeOrder } from "../api.js";
 
-// Panier et paiement. Le total affiché est indicatif : l'API recalcule avec ses propres prix.
-export default function Cart({ products, cart, onQuantity, session, onLogin, onExpired, onOrdered }) {
+// Panier et paiement avec la cagnotte. Le total affiché est indicatif : l'API
+// recalcule avec ses propres prix et refuse (402) si la cagnotte ne suffit pas.
+export default function Cart({ products, cart, onQuantity, session, balance, onLogin, onExpired, onOrdered, onRecharge }) {
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState(null); // succès : { ok, order, payment } ; échec : { ok, text }
-  const [paying, setPaying] = useState(false); // formulaire de carte affiché
+  const [result, setResult] = useState(null); // succès : { ok, order } ; échec : { ok, text }
 
   const lines = products.filter((p) => cart[p.id]).map((p) => ({ ...p, quantity: cart[p.id] }));
   const total = lines.reduce((sum, line) => sum + line.price * line.quantity, 0);
+  const missing = balance === undefined ? 0 : total - balance;
 
-  // payment : résumé renvoyé par PaymentForm (e-mail, adresse, marque, 4 derniers chiffres).
-  // L'API ne reçoit que le panier : la carte n'est pas transmise (boutique fictive).
-  async function checkout(payment) {
+  async function checkout() {
     setBusy(true);
     setResult(null);
     try {
-      const order = await placeOrder(session.token, cart);
-      setResult({ ok: true, order, payment });
-      setPaying(false);
+      const order = await withMinDelay(placeOrder(session.token, cart));
+      setResult({ ok: true, order });
       onOrdered();
     } catch (error) {
       if (error.status === 401) onExpired();
@@ -64,19 +62,33 @@ export default function Cart({ products, cart, onQuantity, session, onLogin, onE
       )}
 
       {lines.length > 0 && !session && <AuthForm onLogin={onLogin} />}
-      {lines.length > 0 && session && !paying && (
-        <button
-          onClick={() => { setPaying(true); setResult(null); }}
-          className="mt-4 w-full rounded-full bg-candy-ink px-4 py-2.5 font-semibold text-white hover:bg-candy-ink/85"
-        >
-          Payer {euros(total)}
-        </button>
-      )}
-      {lines.length > 0 && session && paying && (
-        <PaymentForm amountLabel={euros(total)} busy={busy} onSubmit={checkout} onCancel={() => setPaying(false)} />
+      {lines.length > 0 && session && (
+        <div className="mt-4 space-y-3">
+          <p className="flex justify-between text-sm">
+            <span className="text-candy-ink/70">Ma cagnotte</span>
+            <span className="font-semibold">{balance === undefined ? "…" : euros(balance)}</span>
+          </p>
+          {missing > 0 ? (
+            <>
+              <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                Il manque {euros(missing)} dans votre cagnotte pour cette commande.
+              </p>
+              <button onClick={onRecharge}
+                className="w-full rounded-full bg-candy-pink px-4 py-2.5 font-semibold text-white hover:bg-candy-pink/85">
+                Recharger ma cagnotte
+              </button>
+            </>
+          ) : (
+            <button onClick={checkout} disabled={busy || balance === undefined}
+              className="w-full rounded-full bg-candy-ink px-4 py-2.5 font-semibold text-white hover:bg-candy-ink/85 disabled:opacity-60">
+              Payer {euros(total)} avec ma cagnotte
+            </button>
+          )}
+        </div>
       )}
 
-      {result?.ok && <Receipt order={result.order} payment={result.payment} />}
+      {busy && <PaymentPending text={`Paiement de ${euros(total)} avec votre cagnotte. Ne fermez pas la page.`} />}
+      {result?.ok && <Receipt order={result.order} />}
       {result && !result.ok && (
         <p role="status" className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
           <span aria-hidden="true">✖ </span>
@@ -88,8 +100,7 @@ export default function Cart({ products, cart, onQuantity, session, onLogin, onE
 }
 
 // Reçu affiché après un paiement réussi.
-function Receipt({ order, payment }) {
-  const { street, postalCode, city } = payment.address;
+function Receipt({ order }) {
   return (
     <div role="status" className="mt-4 overflow-hidden rounded-xl border border-green-200 bg-green-50 text-sm">
       <div className="flex items-center gap-3 bg-green-600 px-4 py-3 text-white">
@@ -109,9 +120,8 @@ function Receipt({ order, payment }) {
         <ReceiptRow label="Commande">
           <span className="rounded bg-white px-1.5 py-0.5 font-mono text-xs">n° {order.id.slice(0, 8)}</span>
         </ReceiptRow>
-        <ReceiptRow label="Carte">{payment.brand} •••• {payment.last4}</ReceiptRow>
-        <ReceiptRow label="Livraison">{street}<br />{postalCode} {city}</ReceiptRow>
-        <ReceiptRow label="Reçu envoyé à"><span className="break-all">{payment.email}</span></ReceiptRow>
+        <ReceiptRow label="Payé avec">Ma cagnotte</ReceiptRow>
+        <ReceiptRow label="Nouveau solde">{euros(order.balance)}</ReceiptRow>
       </dl>
     </div>
   );

@@ -39,7 +39,20 @@ CREATE TABLE IF NOT EXISTS customers (
     postal_code    TEXT NOT NULL DEFAULT '',
     city           TEXT NOT NULL DEFAULT '',
     -- Compte marchand (stock, catalogue) : seul celui de SHOP_MERCHANT_EMAIL, créé par l'API.
-    is_merchant    BOOLEAN NOT NULL DEFAULT false
+    is_merchant    BOOLEAN NOT NULL DEFAULT false,
+    -- Cagnotte du client (rechargée par carte, débitée à chaque commande) ;
+    -- pour le marchand, son épargne (créditée à chaque vente, vidée par virement).
+    balance        NUMERIC(10, 2) NOT NULL DEFAULT 0 CHECK (balance >= 0)
+);
+
+-- Journal de la cagnotte : recharges (topup), achats (purchase), ventes (sale), virements (payout).
+CREATE TABLE IF NOT EXISTS wallet_movements (
+    id           SERIAL PRIMARY KEY,
+    customer_id  INTEGER NOT NULL REFERENCES customers(id),
+    kind         TEXT NOT NULL,
+    amount       NUMERIC(10, 2) NOT NULL,  -- positif : crédit ; négatif : débit
+    label        TEXT NOT NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Commandes : chacune est payée par une transaction.

@@ -5,7 +5,7 @@ const input = "mt-1 w-full rounded-lg border border-candy-light px-3 py-2 text-s
 
 // Espace marchand : réapprovisionner le stock, ajouter et retirer des confiseries du catalogue.
 // Affiché seulement pour le compte marchand ; l'API revérifie le rôle à chaque appel.
-export default function Merchant({ products, session, onExpired, onChanged }) {
+export default function Merchant({ products, session, balance, onExpired, onChanged, onSavings }) {
   const [message, setMessage] = useState(null); // { ok, text }
 
   // Exécute un appel marchand, affiche le résultat et recharge le catalogue.
@@ -26,6 +26,17 @@ export default function Merchant({ products, session, onExpired, onChanged }) {
   return (
     <section aria-label="Espace marchand" className="mx-auto max-w-3xl space-y-6">
       <h2 className="text-lg font-bold">Espace marchand</h2>
+
+      {/* Épargne : créditée à chaque commande client, virée depuis la page « Épargne ». */}
+      <div className="flex flex-wrap items-center gap-4 rounded-2xl bg-candy-ink p-5 text-white shadow-sm">
+        <div className="flex-1">
+          <p className="text-sm text-white/75">Épargne (ventes encaissées)</p>
+          <p className="mt-1 text-3xl font-bold">{balance === undefined ? "…" : euros(balance)}</p>
+        </div>
+        <button onClick={onSavings} className="rounded-full bg-white px-4 py-2 font-semibold text-candy-ink hover:bg-candy-light">
+          Historique et virement
+        </button>
+      </div>
 
       {message && (
         <p role="status" className={`rounded-xl px-4 py-2 text-sm font-medium ${message.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>

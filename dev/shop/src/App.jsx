@@ -6,8 +6,10 @@ import Home from "./components/Home.jsx";
 import Orders from "./components/Orders.jsx";
 import Profile from "./components/Profile.jsx";
 import Merchant from "./components/Merchant.jsx";
+import Wallet from "./components/Wallet.jsx";
+import Savings from "./components/Savings.jsx";
 import AuthForm from "./components/AuthForm.jsx";
-import { fetchProducts } from "./api.js";
+import { fetchProducts, fetchWallet } from "./api.js";
 import { PHOTO_CREDITS } from "./credits.js";
 
 // Le panier et la session sont gardés dans le navigateur pour survivre à un
@@ -32,7 +34,9 @@ export default function App() {
   const [loadError, setLoadError] = useState(null);
   const [cart, setCart] = useState(() => load("cart", {})); // { idProduit: quantité }
   const [session, setSession] = useState(() => load("session", null)); // { token, name, merchant }
-  const [view, setView] = useState("home"); // "home", "shop", "orders", "profile", "merchant" ou "login"
+  // "home", "shop", "orders", "profile", "wallet" (cagnotte), "merchant", "savings" (épargne du marchand) ou "login"
+  const [view, setView] = useState("home");
+  const [wallet, setWallet] = useState(null); // { balance, movements } du compte connecté
 
   useEffect(() => save("cart", cart), [cart]);
   useEffect(() => save("session", session), [session]);
@@ -59,6 +63,23 @@ export default function App() {
   }
   useEffect(refreshProducts, []);
 
+  // Solde rechargé à la connexion et après chaque opération (commande, recharge, virement).
+  function refreshWallet() {
+    if (!session) return setWallet(null);
+    fetchWallet(session.token)
+      .then((next) => {
+        setWallet(next);
+        // Rôle retiré (ou donné) depuis la connexion : les onglets marchand suivent.
+        if (next.merchant !== Boolean(session.merchant)) setSession({ ...session, merchant: next.merchant });
+      })
+      .catch((error) => error.status === 401 && logout());
+  }
+  useEffect(refreshWallet, [session?.token]);
+  // L'épargne du marchand bouge avec les achats des clients : relue à l'ouverture de ses pages.
+  useEffect(() => {
+    if (view === "merchant" || view === "savings") refreshWallet();
+  }, [view]);
+
   function setQuantity(productId, quantity) {
     setCart((current) => {
       const next = { ...current };
@@ -70,6 +91,7 @@ export default function App() {
 
   function logout() {
     setSession(null);
+    setWallet(null);
     setView("shop");
   }
 
@@ -77,7 +99,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
-      <Header session={session} cartCount={cartCount} view={view} onView={setView} onLogout={logout} />
+      <Header session={session} balance={wallet?.balance} cartCount={cartCount} view={view} onView={setView} onLogout={logout} />
       <main className="mx-auto max-w-6xl px-4 py-6">
         {view === "home" ? (
           <Home products={products} onShop={() => setView("shop")} />
@@ -87,8 +109,13 @@ export default function App() {
           <div className="mx-auto max-w-sm">
             <AuthForm title="Connexion" onLogin={(s) => { setSession(s); setView(s.merchant ? "merchant" : "shop"); }} />
           </div>
+        ) : view === "wallet" && session && !session.merchant ? (
+          <Wallet session={session} wallet={wallet} onExpired={logout} onChanged={setWallet} />
+        ) : view === "savings" && session?.merchant ? (
+          <Savings session={session} wallet={wallet} onExpired={logout} onChanged={setWallet} />
         ) : view === "merchant" && session?.merchant ? (
-          <Merchant products={products} session={session} onExpired={logout} onChanged={refreshProducts} />
+          <Merchant products={products} session={session} balance={wallet?.balance} onExpired={logout}
+            onChanged={refreshProducts} onSavings={() => setView("savings")} />
         ) : view === "profile" && session ? (
           // Le prénom affiché dans l'en-tête suit les modifications du profil.
           <Profile session={session} onExpired={logout} onNameChange={(name) => setSession({ ...session, name })} />
@@ -100,11 +127,14 @@ export default function App() {
               cart={cart}
               onQuantity={setQuantity}
               session={session}
+              balance={wallet?.balance}
               onLogin={setSession}
               onExpired={logout}
+              onRecharge={() => setView("wallet")}
               onOrdered={() => {
                 setCart({});
                 refreshProducts();
+                refreshWallet();
               }}
             />
           </div>

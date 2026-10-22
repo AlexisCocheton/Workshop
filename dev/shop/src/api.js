@@ -31,7 +31,13 @@ export const updateProfile = (token, profile) => call("/shop/profile", { method:
 export const changePassword = (token, current_password, new_password) =>
   call("/shop/profile/password", { method: "PUT", token, body: { current_password, new_password } });
 
-// cart : { idProduit: quantité }. Seuls les ids et quantités partent : le prix est fixé par l'API.
+// Cagnotte : { balance, movements: [{ kind, amount, label, created_at }] }. Pour le marchand, c'est son épargne.
+export const fetchWallet = (token) => call("/shop/wallet", { token });
+// La carte n'est pas transmise (boutique fictive) : seul le montant part.
+export const topUp = (token, amount) => call("/shop/wallet/topup", { method: "POST", token, body: { amount } });
+
+// cart : { idProduit: quantité }. Seuls les ids et quantités partent : le prix est fixé par l'API,
+// et le total est débité de la cagnotte.
 export const placeOrder = (token, cart) =>
   call("/shop/orders", {
     method: "POST",
@@ -46,5 +52,7 @@ export const restockProduct = (token, productId, quantity) =>
 export const createProduct = (token, product) => call("/shop/merchant/products", { method: "POST", token, body: product });
 // Retire du catalogue ; les commandes passées gardent le produit dans leur historique.
 export const deleteProduct = (token, productId) => call(`/shop/merchant/products/${productId}`, { method: "DELETE", token });
+// Virement de l'épargne vers le compte bancaire du marchand : { amount, iban, holder }.
+export const payout = (token, transfer) => call("/shop/merchant/payout", { method: "POST", token, body: transfer });
 
 export const euros = (amount) => amount.toLocaleString("fr-FR", { style: "currency", currency: "EUR" });

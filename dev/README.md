@@ -27,17 +27,23 @@ compté dans les métriques que lit le détecteur. Pendant l'incident, le paieme
 | `GET /shop/products` | Catalogue (inséré au premier démarrage, liste `PRODUCTS`) |
 | `POST /shop/register` | Création de compte : mot de passe haché (scrypt salé), jeton client |
 | `POST /shop/login` | Connexion : même message d'erreur que l'e-mail existe ou non |
-| `POST /shop/orders` | Commande payée (jeton client) : prix lus en base, stock vérifié, une transaction créée, tout ou rien |
+| `GET /shop/wallet` | Cagnotte du compte connecté (épargne pour le marchand) : solde et 50 derniers mouvements |
+| `POST /shop/wallet/topup` | Recharge de la cagnotte par carte (1 à 500 €) : une transaction créée ; 500 pendant l'incident |
+| `POST /shop/orders` | Commande payée avec la cagnotte (jeton client) : prix lus en base, stock et solde vérifiés (402 si insuffisant), épargne du marchand créditée, une transaction créée, tout ou rien |
 | `GET /shop/orders` | Historique du client connecté, et de lui seul |
 | `GET /shop/profile` | Profil du client connecté : e-mail, prénom, téléphone, adresse (jamais le mot de passe) |
 | `PUT /shop/profile` | Modification du profil (e-mail unique, code postal à 5 chiffres) |
 | `PUT /shop/profile/password` | Changement de mot de passe : l'ancien est exigé, le jeton seul ne suffit pas |
 | `POST /shop/merchant/products/{id}/restock` | Marchand : ajoute `quantity` (1 à 10 000) au stock d'une confiserie |
-| `POST /shop/merchant/products` | Marchand : ajoute une confiserie (nom, description, prix, stock, emoji) |
+| `POST /shop/merchant/products` | Marchand : ajoute une confiserie (nom, description, prix, stock, emoji, photo JPEG facultative) |
+| `DELETE /shop/merchant/products/{id}` | Marchand : retire une confiserie du catalogue (archivée : l'historique des commandes la garde) |
+| `GET /shop/products/{id}/image` | Photo envoyée par le marchand (les produits de départ ont la leur dans `shop/public/products/`) |
+| `POST /shop/merchant/payout` | Marchand : virement de son épargne vers un IBAN (clé modulo 97 vérifiée ; fictif, rien ne part) |
 
 Le compte marchand est défini par `SHOP_MERCHANT_EMAIL` et `SHOP_MERCHANT_PASSWORD`
 dans `.env` : l'`api` le crée (ou lui redonne son rôle) à chaque démarrage. On ne
-peut pas devenir marchand en s'inscrivant. Le marchand se connecte par le lien
+peut pas devenir marchand en s'inscrivant. Il n'y a qu'un marchand : un compte créé avec une ancienne
+valeur de `SHOP_MERCHANT_EMAIL` perd le rôle au démarrage suivant. Le marchand se connecte par le lien
 « Connexion » de l'en-tête et obtient l'onglet « Espace marchand ». Le rôle
 (`customers.is_merchant`) est relu en base à chaque appel `/shop/merchant/*` :
 un client reçoit 403.
@@ -47,15 +53,21 @@ ni au back-office. Le site ne recharge le catalogue qu'à l'ouverture et après 
 commande (pas de rafraîchissement périodique), pour ne pas fausser le trafic
 « normal » appris par le détecteur.
 
-Au paiement, le formulaire de carte (`shop/src/components/PaymentForm.jsx`)
-demande l'e-mail du reçu, l'adresse de livraison (rue, code postal, ville), le titulaire, le numéro, la date d'expiration et le
+Les achats sont payés avec une cagnotte (`customers.balance`, jamais négative,
+journal dans `wallet_movements`). Le client la recharge par carte sur la page
+« Ma cagnotte » ; chaque commande la débite et crédite d'autant l'épargne du
+compte marchand (celui de `SHOP_MERCHANT_EMAIL`), dans la même transaction SQL.
+Le marchand vire son épargne vers son compte bancaire depuis la page « Épargne ».
+
+À la recharge, le formulaire de carte (`shop/src/components/PaymentForm.jsx`)
+demande l'e-mail du reçu, le titulaire, le numéro, la date d'expiration et le
 code de sécurité (CVC). Il s'appuie sur deux bibliothèques libres :
 `react-credit-cards-2` (aperçu visuel de la carte, marque détectée) et
 `card-validator` de Braintree (numéro vérifié par Luhn, date non dépassée, CVC
 de 3 ou 4 chiffres selon la marque). Les données de carte restent en mémoire le
 temps du paiement : rien dans `localStorage`, et le CVC n'est jamais conservé
 (interdit par PCI-DSS). Seul un résumé masqué (marque et 4 derniers chiffres)
-s'affiche dans la confirmation ; l'API ne reçoit que le panier. Pour tester :
+s'affiche dans la confirmation ; l'API ne reçoit que le montant. Pour tester :
 `4242 4242 4242 4242`, n'importe quelle date future, n'importe quel CVC. Un vrai
 site passerait par un prestataire (Stripe Elements, par exemple) pour que la
 carte ne transite jamais par nos serveurs.

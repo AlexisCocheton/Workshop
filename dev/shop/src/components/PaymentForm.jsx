@@ -3,13 +3,12 @@ import Cards from "react-credit-cards-2";
 import "react-credit-cards-2/dist/es/styles-compiled.css";
 import valid from "card-validator";
 
-// Saisie des informations de paiement au moment de l'achat.
+// Saisie de la carte bancaire, pour recharger la cagnotte (page « Ma cagnotte »).
 // - react-credit-cards-2 : aperçu visuel de la carte (marque détectée, retournement sur le CVC).
 // - card-validator (Braintree) : contrôle du numéro (Luhn), de la date d'expiration et du CVC.
 // Les données de carte restent en mémoire, le temps du paiement : jamais dans localStorage,
 // et le CVC n'est jamais conservé (interdit par PCI-DSS). Seul un résumé masqué remonte.
-const EMPTY = { email: "", street: "", postalCode: "", city: "", name: "", number: "", expiry: "", cvc: "" };
-const ADDRESS_FIELDS = ["street", "postalCode", "city"];
+const EMPTY = { email: "", name: "", number: "", expiry: "", cvc: "" };
 
 // Formatage à la frappe : groupes de chiffres selon la marque, "MM/AA" pour la date.
 function formatNumber(value) {
@@ -28,9 +27,6 @@ function validate(form) {
   const cvcSize = number.card?.code.size ?? 3;
   return {
     email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email) ? null : "Adresse e-mail invalide.",
-    street: form.street.trim().length >= 5 ? null : "Adresse de livraison requise.",
-    postalCode: /^\d{5}$/.test(form.postalCode) ? null : "Code postal à 5 chiffres.",
-    city: form.city.trim() ? null : "Ville requise.",
     name: valid.cardholderName(form.name).isValid ? null : "Nom du titulaire requis.",
     number: number.isValid ? null : "Numéro de carte invalide.",
     expiry: valid.expirationDate(form.expiry).isValid ? null : "Date d'expiration invalide ou dépassée.",
@@ -52,7 +48,7 @@ export default function PaymentForm({ amountLabel, busy, onSubmit, onCancel }) {
     name: key,
     value: form[key],
     onChange: (e) => setForm({ ...form, [key]: format(e.target.value) }),
-    onFocus: () => setFocused(key === "email" || ADDRESS_FIELDS.includes(key) ? "" : key),
+    onFocus: () => setFocused(key === "email" ? "" : key),
     onBlur: () => setTouched({ ...touched, [key]: true }),
     "aria-invalid": Boolean(touched[key] && errors[key]),
   });
@@ -67,21 +63,17 @@ export default function PaymentForm({ amountLabel, busy, onSubmit, onCancel }) {
     // Résumé non sensible : de quoi afficher « Visa •••• 4242 » sur un reçu, rien de plus.
     onSubmit({
       email: form.email,
-      address: { street: form.street.trim(), postalCode: form.postalCode, city: form.city.trim() },
       cardholder: form.name,
       brand: valid.number(digits).card?.niceType ?? "Carte",
       last4: digits.slice(-4),
       expiry: form.expiry,
     });
-    // Efface numéro, date et CVC ; garde e-mail, adresse et titulaire pour une prochaine commande.
-    setForm({ ...EMPTY, email: form.email, street: form.street, postalCode: form.postalCode, city: form.city, name: form.name });
+    // Efface numéro, date et CVC ; garde e-mail et titulaire pour une prochaine recharge.
+    setForm({ ...EMPTY, email: form.email, name: form.name });
   }
 
   return (
-    // Hauteur bornée et défilement interne : le panier est "sticky" sur grand écran,
-    // sans cela le bas du formulaire (bouton Payer) sortirait de l'écran.
-    <form onSubmit={submit} noValidate
-      className="mt-4 max-h-[70vh] space-y-3 overflow-y-auto overscroll-contain rounded-xl bg-candy-light/50 p-4">
+    <form onSubmit={submit} noValidate className="space-y-3 rounded-xl bg-candy-light/50 p-4">
       <p className="text-sm font-semibold">Informations de paiement</p>
 
       <div className="origin-top scale-[0.85]">
@@ -102,28 +94,6 @@ export default function PaymentForm({ amountLabel, busy, onSubmit, onCancel }) {
         {error("email")}
       </label>
 
-      <fieldset className="space-y-3">
-        <legend className="text-sm font-semibold">Adresse de livraison</legend>
-        <label className="block text-sm">
-          Numéro et rue
-          <input className={input} autoComplete="shipping street-address" placeholder="12 rue des Bonbons"
-            {...field("street")} />
-          {error("street")}
-        </label>
-        <div className="grid grid-cols-[7rem_1fr] gap-3">
-          <label className="block text-sm">
-            Code postal
-            <input className={input} inputMode="numeric" autoComplete="shipping postal-code" placeholder="75001"
-              {...field("postalCode", (v) => v.replace(/\D/g, "").slice(0, 5))} />
-            {error("postalCode")}
-          </label>
-          <label className="block text-sm">
-            Ville
-            <input className={input} autoComplete="shipping address-level2" {...field("city")} />
-            {error("city")}
-          </label>
-        </div>
-      </fieldset>
 
       <p className="text-sm font-semibold">Carte bancaire</p>
       <label className="block text-sm">
@@ -156,9 +126,11 @@ export default function PaymentForm({ amountLabel, busy, onSubmit, onCancel }) {
         className="w-full rounded-full bg-candy-ink px-4 py-2.5 font-semibold text-white hover:bg-candy-ink/85 disabled:opacity-60">
         {busy ? "Paiement en cours…" : `Payer ${amountLabel}`}
       </button>
-      <button type="button" className="w-full text-sm text-candy-pink underline" onClick={onCancel}>
-        Annuler
-      </button>
+      {onCancel && (
+        <button type="button" className="w-full text-sm text-candy-pink underline" onClick={onCancel}>
+          Annuler
+        </button>
+      )}
       <p className="text-xs text-candy-ink/60">
         🔒 Boutique fictive : utilisez une carte de test (ex. 4242 4242 4242 4242). Rien n'est débité ni conservé.
       </p>
