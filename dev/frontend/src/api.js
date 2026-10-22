@@ -24,6 +24,7 @@ async function getJson(url, options) {
 export const fetchStatus = () => getJson(`${DETECTOR}/status`);
 export const fetchEvents = () => getJson(`${REMEDIATION}/events`);
 export const fetchTransactions = () => getJson(`${WAF}/transactions`);
+export const fetchWafBlocks = () => getJson(`${DETECTOR}/waf/blocks`);
 
 export async function payDemo() {
   const { token } = await getJson(`${WAF}/auth/login`, {
