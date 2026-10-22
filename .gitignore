@@ -12,6 +12,8 @@ compose.override.yml
 # --- Données et modèles entraînés (régénérés par /retrain-model) ---
 ai/data/*.csv
 ai/data/*.joblib
+# anciennes collectes archivées localement
+ai/data/archive/
 # on garde ai/data/report.json comme preuve de résultats
 !ai/data/report.json
 # Visages enregistrés : donnée biométrique (RGPD art. 9), jamais versionnée
