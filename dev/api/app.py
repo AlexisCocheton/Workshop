@@ -12,6 +12,8 @@ elle met le service hors d'usage. C'est ce que l'attaque exploite ; seul un
 redémarrage du conteneur (déclenché par le moteur de remédiation) le rétablit.
 Aucune donnée réelle : tout est fictif.
 """
+import base64
+import binascii
 import hashlib
 import hmac
 import os
@@ -91,6 +93,8 @@ CREATE TABLE IF NOT EXISTS transactions (
 CREATE TABLE IF NOT EXISTS products (
     id SERIAL PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL,
     price NUMERIC(8, 2) NOT NULL, stock INTEGER NOT NULL CHECK (stock >= 0), emoji TEXT NOT NULL);
+ALTER TABLE products ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS image BYTEA;
 CREATE TABLE IF NOT EXISTS customers (
     id SERIAL PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
     password_hash TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now());
@@ -303,20 +307,49 @@ class ProductIn(BaseModel):
     price: float
     stock: int
     emoji: str = "🍬"
+    image: str | None = None  # JPEG en base64, réduit par le navigateur (le WAF borne le corps à 64 Ko)
 
 
-PRODUCT_COLUMNS = "id, name, description, price, stock, emoji"
+# L'image n'est pas lue avec le catalogue : seul un indicateur indique qu'elle existe.
+PRODUCT_COLUMNS = "id, name, description, price, stock, emoji, image IS NOT NULL"
+MAX_IMAGE = 48_000  # octets, une fois décodée
 
 
 def product_dict(r) -> dict:
-    return {"id": r[0], "name": r[1], "description": r[2], "price": float(r[3]), "stock": r[4], "emoji": r[5]}
+    return {"id": r[0], "name": r[1], "description": r[2], "price": float(r[3]), "stock": r[4], "emoji": r[5],
+            "has_image": r[6]}
+
+
+def decode_image(data: str | None) -> bytes | None:
+    """Décode l'image envoyée par le marchand. Seul le JPEG est accepté, vérifié à sa
+    signature et non au type annoncé : on ne sert jamais un fichier arbitraire."""
+    if not data:
+        return None
+    try:
+        image = base64.b64decode(data, validate=True)
+    except (binascii.Error, ValueError):
+        raise HTTPException(422, "image illisible")
+    if len(image) > MAX_IMAGE:
+        raise HTTPException(422, f"image trop lourde ({MAX_IMAGE // 1000} Ko maximum)")
+    if not image.startswith(b"\xff\xd8\xff"):
+        raise HTTPException(422, "image JPEG attendue")
+    return image
 
 
 @app.get("/shop/products")
 def list_products():
     with connect() as conn:
-        rows = conn.execute(f"SELECT {PRODUCT_COLUMNS} FROM products ORDER BY id").fetchall()
+        rows = conn.execute(f"SELECT {PRODUCT_COLUMNS} FROM products WHERE NOT archived ORDER BY id").fetchall()
     return [product_dict(r) for r in rows]
+
+
+@app.get("/shop/products/{product_id}/image")
+def product_image(product_id: int):
+    with connect() as conn:
+        row = conn.execute("SELECT image FROM products WHERE id = %s AND image IS NOT NULL", (product_id,)).fetchone()
+    if row is None:
+        raise HTTPException(404, "pas d'image")
+    return Response(bytes(row[0]), media_type="image/jpeg", headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.post("/shop/register")
@@ -422,7 +455,7 @@ def create_order(body: OrderIn, customer_id: int = Depends(require_customer)):
             # Le prix vient de la base, jamais du navigateur. Le stock ne baisse que
             # s'il suffit, vérifié et décrémenté en une requête (pas de survente).
             row = conn.execute(
-                "UPDATE products SET stock = stock - %s WHERE id = %s AND stock >= %s RETURNING price",
+                "UPDATE products SET stock = stock - %s WHERE id = %s AND stock >= %s AND NOT archived RETURNING price",
                 (item.quantity, item.product_id, item.quantity),
             ).fetchone()
             if row is None:
@@ -487,7 +520,7 @@ def restock_product(product_id: int, body: RestockIn, _=Depends(require_merchant
         raise HTTPException(422, f"quantité entre 1 et {MAX_RESTOCK}")
     with connect() as conn:
         row = conn.execute(
-            f"UPDATE products SET stock = stock + %s WHERE id = %s RETURNING {PRODUCT_COLUMNS}",
+            f"UPDATE products SET stock = stock + %s WHERE id = %s AND NOT archived RETURNING {PRODUCT_COLUMNS}",
             (body.quantity, product_id),
         ).fetchone()
     if row is None:
@@ -497,7 +530,7 @@ def restock_product(product_id: int, body: RestockIn, _=Depends(require_merchant
 
 @app.post("/shop/merchant/products")
 def create_product(body: ProductIn, _=Depends(require_merchant)):
-    """Ajoute une nouvelle confiserie au catalogue (sans photo : l'emoji la remplace)."""
+    """Ajoute une nouvelle confiserie au catalogue (sans photo, l'emoji la remplace)."""
     name, description, emoji = body.name.strip(), body.description.strip(), body.emoji.strip()
     if not name or not description or not emoji:
         raise HTTPException(422, "nom, description et emoji obligatoires")
@@ -507,10 +540,25 @@ def create_product(body: ProductIn, _=Depends(require_merchant)):
         raise HTTPException(422, "prix entre 0,01 et 1000 €")
     if not 0 <= body.stock <= MAX_RESTOCK:
         raise HTTPException(422, f"stock entre 0 et {MAX_RESTOCK}")
+    image = decode_image(body.image)
     with connect() as conn:
         row = conn.execute(
-            "INSERT INTO products (name, description, price, stock, emoji) VALUES (%s, %s, %s, %s, %s) "
+            "INSERT INTO products (name, description, price, stock, emoji, image) VALUES (%s, %s, %s, %s, %s, %s) "
             f"RETURNING {PRODUCT_COLUMNS}",
-            (name, description, round(body.price, 2), body.stock, emoji),
+            (name, description, round(body.price, 2), body.stock, emoji, image),
         ).fetchone()
+    return product_dict(row)
+
+
+@app.delete("/shop/merchant/products/{product_id}")
+def delete_product(product_id: int, _=Depends(require_merchant)):
+    """Retire une confiserie du catalogue. Elle est archivée, pas effacée : les
+    commandes passées la référencent et gardent ainsi leur historique."""
+    with connect() as conn:
+        row = conn.execute(
+            f"UPDATE products SET archived = true WHERE id = %s AND NOT archived RETURNING {PRODUCT_COLUMNS}",
+            (product_id,),
+        ).fetchone()
+    if row is None:
+        raise HTTPException(404, "produit introuvable")
     return product_dict(row)

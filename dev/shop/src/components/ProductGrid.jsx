@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { euros } from "../api.js";
+import { euros, productImageUrl } from "../api.js";
 
-// Photo du produit (public/products/<id>.jpg). Sans photo (produit ajouté plus
-// tard), on retombe sur l'emoji stocké en base.
+// Photo du produit : celle envoyée par le marchand, sinon public/products/<id>.jpg
+// (catalogue de départ). Sans photo, on retombe sur l'emoji stocké en base.
 export function ProductImage({ product }) {
   const [missing, setMissing] = useState(false);
   if (missing) {
@@ -14,7 +14,7 @@ export function ProductImage({ product }) {
   }
   return (
     <img
-      src={`/products/${product.id}.jpg`}
+      src={product.has_image ? productImageUrl(product.id) : `/products/${product.id}.jpg`}
       alt={product.name}
       loading="lazy"
       onError={() => setMissing(true)}

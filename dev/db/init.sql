@@ -19,7 +19,11 @@ CREATE TABLE IF NOT EXISTS products (
     description  TEXT NOT NULL,
     price        NUMERIC(8, 2) NOT NULL,
     stock        INTEGER NOT NULL CHECK (stock >= 0),
-    emoji        TEXT NOT NULL
+    emoji        TEXT NOT NULL,
+    -- Retiré du catalogue par le marchand (gardé pour l'historique des commandes).
+    archived     BOOLEAN NOT NULL DEFAULT false,
+    -- Photo JPEG ajoutée par le marchand (les produits de départ ont la leur dans dev/shop/public).
+    image        BYTEA
 );
 
 -- Comptes clients : mot de passe haché (scrypt salé), jamais en clair.
