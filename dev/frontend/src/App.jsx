@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchEvents, fetchStatus, fetchTransactions } from "./api.js";
+import { fetchEvents, fetchStatus, fetchTransactions, fetchWafBlocks } from "./api.js";
 import { useFunMode } from "./funMode.js";
 import { formatClock, phaseOf } from "./status.js";
 import Assistant from "./components/Assistant.jsx";
@@ -11,6 +11,7 @@ import RemediationLog from "./components/RemediationLog.jsx";
 import ServiceCards from "./components/ServiceCards.jsx";
 import StatusBanner from "./components/StatusBanner.jsx";
 import Timeline from "./components/Timeline.jsx";
+import WafBlocks from "./components/WafBlocks.jsx";
 
 const WINDOW_MS = 5 * 60 * 1000; // historique gardé pour le graphique : 5 minutes
 
@@ -27,6 +28,7 @@ export default function App() {
 function Dashboard({ onLogout }) {
   const [status, setStatus] = useState(null);
   const [events, setEvents] = useState([]);
+  const [wafBlocks, setWafBlocks] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [history, setHistory] = useState([]);
   const [updatedAt, setUpdatedAt] = useState(null);
@@ -52,6 +54,11 @@ function Dashboard({ onLogout }) {
         setEvents(await fetchEvents());
       } catch {
         // Remédiation injoignable : on garde le dernier journal connu.
+      }
+      try {
+        setWafBlocks(await fetchWafBlocks());
+      } catch {
+        // Détecteur injoignable : on garde la dernière liste connue.
       }
     }
     refresh();
@@ -105,7 +112,7 @@ function Dashboard({ onLogout }) {
         </header>
 
         <StatusBanner status={status} events={events} fun={fun} />
-        <ServiceCards status={status} events={events} />
+        <ServiceCards status={status} events={events} wafBlocks={wafBlocks} />
         <Timeline history={history} events={events} />
 
         <div className="grid gap-5 lg:grid-cols-2">
@@ -114,7 +121,11 @@ function Dashboard({ onLogout }) {
         </div>
 
         <div className="grid gap-5 lg:grid-cols-2">
+          <WafBlocks blocks={wafBlocks} />
           <PaymentPanel transactions={transactions} onPaid={refreshTransactions} />
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-2">
           <Assistant />
         </div>
       </div>

@@ -25,11 +25,13 @@ function Tile({ label, value, detail, icon, tone }) {
   );
 }
 
-export default function ServiceCards({ status, events }) {
+export default function ServiceCards({ status, events, wafBlocks = [] }) {
   const healthy = status?.api_healthy;
   const lastAction = events[0];
   const restarted = lastAction?.event === "anomaly";
-  const blocks = Math.round(status?.values?.waf_blocks ?? 0);
+  // Nombre de blocages récents (fenêtre ~10 min de l'endpoint /waf/blocks) : plus
+  // parlant que la feature du modèle, qui retombe à 0 au bout de 30 s après l'attaque.
+  const blocks = wafBlocks.length;
 
   return (
     <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -59,7 +61,7 @@ export default function ServiceCards({ status, events }) {
         value={`${blocks} blocage${blocks > 1 ? "s" : ""}`}
         icon="⛨"
         tone={blocks > 0 ? "warning" : "good"}
-        detail="Requêtes malveillantes, 30 dernières secondes"
+        detail="Requêtes malveillantes bloquées (10 dernières minutes)"
       />
     </div>
   );

@@ -59,4 +59,34 @@ QUESTIONS = [
         "source": "reponse-incident.md",
         "must_contain": "api_down",
     },
+    {
+        "question": "Par où passent toutes les requêtes de la plateforme ?",
+        "source": "architecture.md",
+        "must_contain": "WAF",
+    },
+    {
+        "question": "Quel composant a le droit d'agir sur le système ?",
+        "source": "architecture.md",
+        "must_contain": "remédiation",
+    },
+    {
+        "question": "Où regarder pour voir les blocages du WAF ?",
+        "source": "architecture.md",
+        "must_contain": "Grafana",
+    },
+    {
+        "question": "Quel est le RTO visé pour le service de paiement ?",
+        "source": "continuite-reprise.md",
+        "must_contain": "RTO",
+    },
+    {
+        "question": "Un redémarrage corrige-t-il une fuite de données ?",
+        "source": "continuite-reprise.md",
+        "must_contain": "disponibilité",
+    },
+    {
+        "question": "Que faire si la reprise automatique ne fonctionne pas ?",
+        "source": "continuite-reprise.md",
+        "must_contain": "repli manuel",
+    },
 ]

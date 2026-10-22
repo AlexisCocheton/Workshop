@@ -29,7 +29,7 @@ from config import (
     REMEDIATION_URL,
 )
 from detector.classify import classify
-from detector.features import FEATURE_NAMES, api_healthy, fetch_now
+from detector.features import FEATURE_NAMES, api_healthy, fetch_now, recent_waf_blocks
 from detector.telegram import send_alert
 
 ANOMALY_SCORE = Gauge("aiops_anomaly_score", "Score du modèle : > 0 = point anormal")
@@ -163,6 +163,15 @@ app.add_middleware(CORSMiddleware, allow_origins=DASHBOARD_ORIGINS, allow_method
 @app.get("/status")
 def get_status():
     return status
+
+
+@app.get("/waf/blocks")
+def waf_blocks():
+    """Dernières requêtes bloquées par le WAF (type, URL, IP), pour le dashboard.
+
+    Lecture seule : le détecteur relit les logs du WAF dans Loki, il n'agit pas.
+    """
+    return recent_waf_blocks()
 
 
 @app.get("/metrics")
