@@ -208,23 +208,24 @@ IsolationForest ne coupe jamais sur une feature constante pendant l'apprentissag
 donc pas une feature qui vaut toujours 0 en temps normal (erreurs 5xx, blocages WAF), alors que
 c'est précisément ce qui bouge lors d'un incident.
 
-**Résultats sur notre plateforme** (collecte réelle du 2026-10-22 : 234 points de trafic normal
-en 20 min — cycles calme / montée / palier / descente, de 0,3 à 5,7 req/s, générés par
-`traffic.py`, incluant la navigation sur la boutique `/shop/*` — et 36 points d'attaque
-scan + callback, avec blocages WAF) :
+**Résultats sur notre plateforme** (collecte réelle du 2026-10-22 : 173 points de trafic normal
+en 15 min — cycles calme / montée / palier / descente, de 0,4 à 4,6 req/s, générés par
+`traffic.py`, incluant la navigation sur la boutique `/shop/*` et ~3 % d'erreurs 4xx légitimes
+(jetons expirés) — et 36 points d'attaque scan + callback, avec blocages WAF) :
 
 | Indicateur | Valeur |
 |---|---|
-| Faux positifs (59 points de trafic normal de test) | 0 % |
+| Faux positifs (44 points de trafic normal de test) | 0 % |
 | Précision | 100 % |
-| Rappel (points d'attaque détectés) | 94,4 % (34/36) |
-| Matrice de confusion | TN 59, FP 0, FN 2, TP 34 |
+| Rappel (points d'attaque détectés) | 91,7 % (33/36) |
+| Matrice de confusion | TN 44, FP 0, FN 3, TP 33 |
 | Délai de reprise complète (détection + redémarrage) | ~30 s, nouvelle transaction réussie |
 
-Le modèle a été réentraîné en incluant le trafic de la boutique et la feature `waf_blocks`
-réactivée (voir `features.py`) : il tolère une simple visite de la boutique, et exploite
-désormais les blocages du WAF comme signal d'attaque. Les 2 points d'attaque ratés sont les
-tout premiers, avant que les fenêtres `rate[30s]` ne montent — absorbés par le debounce.
+Le modèle inclut le trafic de la boutique, la feature `waf_blocks` et, désormais, un faible taux
+d'erreurs 4xx légitimes dans le trafic normal : il tolère ainsi qu'un opérateur ou un client
+génère ponctuellement des 401/403 sans crier à l'attaque (voir « Dérive applicative » plus bas).
+Les 3 points d'attaque ratés sont des points de bordure (début/fin d'attaque, sans 5xx ni blocage
+WAF, quasi indiscernables du normal) — absorbés par le debounce 3-points.
 
 **Compromis de sensibilité.** Entraîné sur un trafic normal riche, le modèle tolère mieux les
 variations de charge, mais réagit moins aux petits taux d'erreurs : ~5 erreurs 5xx/s sont
@@ -234,7 +235,17 @@ de toute façon couverte par le contrôle de santé actif, indépendant du trafi
 **Fausse alerte corrigée.** Une première version, entraînée sur 5 min de trafic stable (~45 points),
 prenait la *montée en charge* au démarrage du trafic pour une anomalie (score positif à 1,5 req/s) :
 elle a déclenché un redémarrage inutile de l'API pendant un test. Le modèle actuel, entraîné sur
-20 min de cycles variés (boutique incluse), ne produit aucun score positif sur la même montée.
+des cycles variés (boutique incluse), ne produit aucun score positif sur la même montée.
+
+**Dérive applicative (data drift) — cas vécu, instructif.** En sécurisant `GET /orders` (jeton
+obligatoire), le dashboard s'est mis à recevoir des 401 en boucle quand son jeton manquait ou avait
+expiré. Ce flux de 4xx, *jamais vu à l'entraînement*, a fait basculer le détecteur en anomalie
+permanente : un **faux positif**, non pas dû au modèle mais à un changement de l'application qui a
+modifié la distribution du trafic. Double correction : (1) côté application, le dashboard cesse de
+marteler l'API et repasse par la connexion sur un 401 ; (2) côté modèle, le trafic normal de
+réentraînement inclut désormais un faible taux de 4xx légitimes, pour que le détecteur les tolère.
+C'est le risque classique d'un détecteur figé face à une plateforme qui évolue : toute modification
+notable de l'application doit s'accompagner d'une recollecte et d'un réentraînement.
 
 **Note sur l'évaluation.** Le découpage train/test du trafic normal est *mélangé* (`shuffle=True`),
 pas chronologique. Les collectes étant courtes, un découpage chronologique isolerait tout un régime
@@ -242,10 +253,12 @@ de débit (les pics de charge) dans le test, que le modèle n'aurait jamais appr
 artificiellement les faux positifs (mesuré : 67 % en chronologique contre 0 % en mélangé, mêmes données).
 
 **Deux réglages appris en conditions réelles (importants pour la fiabilité en démo) :**
-- **`n_neighbors` adapté à la taille du jeu** (`max(5, min(20, n//3))`). Avec une collecte courte
-  (~45 points d'entraînement), un `n_neighbors` fixé à 20 fait dégénérer LOF : un incident franc
-  (5xx = 20/s) obtenait un score négatif (classé normal) au lieu de +37. C'était un faux négatif
-  silencieux qui aurait fait rater la reprise en direct.
+- **`n_neighbors` adapté à la taille du jeu** (`max(5, min(40, n//3))`). Avec une collecte courte
+  (~45 points d'entraînement), trop de voisins fait dégénérer LOF : un incident franc (5xx = 20/s)
+  obtenait un score négatif (classé normal) au lieu de +37 — un faux négatif silencieux. À l'inverse,
+  sur une collecte longue (~170 points), trop *peu* de voisins (plafond à 20) rend la frontière de
+  densité sensible à un point normal isolé : ~35-40 voisins la lissent et éliminent ce faux positif
+  sans manquer d'attaque (vérifié). D'où le plafond relevé à 40, qui s'adapte aux deux régimes.
 - **`latency_p95` retirée des features.** Sur un PC Hôte saturé (toute la stack + Ollama), la latence
   au repos (~0,2 s) dépasse celle de l'entraînement et déclenche des faux positifs. L'incident se
   détecte très bien sans elle (surtout via `err_5xx_rate`). Elle est commentée dans `features.py`,
