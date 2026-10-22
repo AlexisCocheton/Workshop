@@ -29,7 +29,17 @@ export default function Header({ session, cartCount, view, onView, onLogout }) {
               Mon profil
             </button>
           )}
+          {session?.merchant && (
+            <button className={tab(view === "merchant")} onClick={() => onView("merchant")}>
+              Espace marchand
+            </button>
+          )}
         </nav>
+        {!session && (
+          <button className="text-sm font-semibold text-candy-pink underline" onClick={() => onView("login")}>
+            Connexion
+          </button>
+        )}
         {session && (
           <div className="flex items-center gap-2 text-sm">
             <span>Bonjour {session.name}</span>

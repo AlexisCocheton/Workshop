@@ -36,6 +36,11 @@ JWT_SECRET = os.getenv("JWT_SECRET")
 if not JWT_SECRET:
     raise RuntimeError("JWT_SECRET est obligatoire.")
 DB_DSN = os.getenv("DB_DSN", "postgresql://app:app@db:5432/payments")
+# Compte marchand de la boutique (réapprovisionne le stock, ajoute des confiseries).
+# Créé au démarrage, jamais par inscription : personne ne peut se déclarer marchand.
+# Sans ces deux variables, il n'y a pas de compte marchand.
+MERCHANT_EMAIL = os.getenv("SHOP_MERCHANT_EMAIL", "").strip().lower()
+MERCHANT_PASSWORD = os.getenv("SHOP_MERCHANT_PASSWORD", "")
 
 # Origines autorisées (CORS) : le dashboard et la boutique, au lieu de tout ouvrir.
 ALLOWED_ORIGINS = (
@@ -93,6 +98,7 @@ ALTER TABLE customers ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '';
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS street TEXT NOT NULL DEFAULT '';
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS postal_code TEXT NOT NULL DEFAULT '';
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS city TEXT NOT NULL DEFAULT '';
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS is_merchant BOOLEAN NOT NULL DEFAULT false;
 CREATE TABLE IF NOT EXISTS orders (
     id TEXT PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id),
     transaction_id TEXT NOT NULL REFERENCES transactions(id), total NUMERIC(10, 2) NOT NULL,
@@ -132,9 +138,24 @@ def init_db():
                             "VALUES (%s, %s, %s, %s, %s)",
                             product,
                         )
+                create_merchant(conn)
             return
         except psycopg.OperationalError:
             time.sleep(2)
+
+
+def create_merchant(conn: psycopg.Connection):
+    """Crée le compte marchand défini dans .env, ou lui redonne son rôle et son mot de passe."""
+    if not (MERCHANT_EMAIL and MERCHANT_PASSWORD):
+        return
+    if len(MERCHANT_PASSWORD) < 8:
+        print("[api] SHOP_MERCHANT_PASSWORD trop court (8 caractères minimum) : pas de compte marchand", flush=True)
+        return
+    conn.execute(
+        "INSERT INTO customers (email, name, password_hash, is_merchant) VALUES (%s, 'Marchand', %s, true) "
+        "ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash, is_merchant = true",
+        (MERCHANT_EMAIL, hash_password(MERCHANT_PASSWORD)),
+    )
 
 
 def require_token(credentials: HTTPAuthorizationCredentials = Depends(bearer)):
@@ -272,16 +293,30 @@ class OrderIn(BaseModel):
     items: list[OrderItemIn]
 
 
+class RestockIn(BaseModel):
+    quantity: int
+
+
+class ProductIn(BaseModel):
+    name: str
+    description: str
+    price: float
+    stock: int
+    emoji: str = "🍬"
+
+
+PRODUCT_COLUMNS = "id, name, description, price, stock, emoji"
+
+
+def product_dict(r) -> dict:
+    return {"id": r[0], "name": r[1], "description": r[2], "price": float(r[3]), "stock": r[4], "emoji": r[5]}
+
+
 @app.get("/shop/products")
 def list_products():
     with connect() as conn:
-        rows = conn.execute(
-            "SELECT id, name, description, price, stock, emoji FROM products ORDER BY id"
-        ).fetchall()
-    return [
-        {"id": r[0], "name": r[1], "description": r[2], "price": float(r[3]), "stock": r[4], "emoji": r[5]}
-        for r in rows
-    ]
+        rows = conn.execute(f"SELECT {PRODUCT_COLUMNS} FROM products ORDER BY id").fetchall()
+    return [product_dict(r) for r in rows]
 
 
 @app.post("/shop/register")
@@ -299,19 +334,20 @@ def register(body: RegisterIn):
             ).fetchone()[0]
     except psycopg.errors.UniqueViolation:
         raise HTTPException(409, "un compte existe déjà avec cet e-mail")
-    return {"token": customer_token(customer_id), "name": name}
+    return {"token": customer_token(customer_id), "name": name, "merchant": False}
 
 
 @app.post("/shop/login")
 def shop_login(body: LoginIn):
     with connect() as conn:
         row = conn.execute(
-            "SELECT id, name, password_hash FROM customers WHERE email = %s", (body.email.strip().lower(),)
+            "SELECT id, name, password_hash, is_merchant FROM customers WHERE email = %s",
+            (body.email.strip().lower(),),
         ).fetchone()
     # Même message que l'e-mail existe ou non : ne révèle pas quels comptes existent.
     if row is None or not password_matches(body.password, row[2]):
         raise HTTPException(401, "e-mail ou mot de passe incorrect")
-    return {"token": customer_token(row[0]), "name": row[1]}
+    return {"token": customer_token(row[0]), "name": row[1], "merchant": row[3]}
 
 
 PROFILE_COLUMNS = ("email", "name", "phone", "street", "postal_code", "city")
@@ -427,3 +463,54 @@ def list_orders(customer_id: int = Depends(require_customer)):
         })
         order["items"].append({"name": name, "emoji": emoji, "quantity": quantity, "unit_price": float(unit_price)})
     return list(orders.values())
+
+
+# --- Espace marchand ------------------------------------------------------------
+
+MAX_RESTOCK = 10_000  # borne par opération : une faute de frappe ne crée pas un stock absurde
+
+
+def require_merchant(customer_id: int = Depends(require_customer)) -> int:
+    """Le rôle est relu en base à chaque appel : le retirer prend effet tout de suite,
+    sans attendre l'expiration du jeton."""
+    with connect() as conn:
+        row = conn.execute("SELECT is_merchant FROM customers WHERE id = %s", (customer_id,)).fetchone()
+    if row is None or not row[0]:
+        raise HTTPException(403, "réservé au marchand")
+    return customer_id
+
+
+@app.post("/shop/merchant/products/{product_id}/restock")
+def restock_product(product_id: int, body: RestockIn, _=Depends(require_merchant)):
+    """Ajoute des unités au stock d'une confiserie existante."""
+    if not 1 <= body.quantity <= MAX_RESTOCK:
+        raise HTTPException(422, f"quantité entre 1 et {MAX_RESTOCK}")
+    with connect() as conn:
+        row = conn.execute(
+            f"UPDATE products SET stock = stock + %s WHERE id = %s RETURNING {PRODUCT_COLUMNS}",
+            (body.quantity, product_id),
+        ).fetchone()
+    if row is None:
+        raise HTTPException(404, "produit introuvable")
+    return product_dict(row)
+
+
+@app.post("/shop/merchant/products")
+def create_product(body: ProductIn, _=Depends(require_merchant)):
+    """Ajoute une nouvelle confiserie au catalogue (sans photo : l'emoji la remplace)."""
+    name, description, emoji = body.name.strip(), body.description.strip(), body.emoji.strip()
+    if not name or not description or not emoji:
+        raise HTTPException(422, "nom, description et emoji obligatoires")
+    if len(name) > 80 or len(description) > 300 or len(emoji) > 8:
+        raise HTTPException(422, "nom (80), description (300) ou emoji (8) trop long")
+    if not 0 < body.price <= 1000:
+        raise HTTPException(422, "prix entre 0,01 et 1000 €")
+    if not 0 <= body.stock <= MAX_RESTOCK:
+        raise HTTPException(422, f"stock entre 0 et {MAX_RESTOCK}")
+    with connect() as conn:
+        row = conn.execute(
+            "INSERT INTO products (name, description, price, stock, emoji) VALUES (%s, %s, %s, %s, %s) "
+            f"RETURNING {PRODUCT_COLUMNS}",
+            (name, description, round(body.price, 2), body.stock, emoji),
+        ).fetchone()
+    return product_dict(row)

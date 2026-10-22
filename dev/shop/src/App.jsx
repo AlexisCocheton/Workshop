@@ -5,6 +5,8 @@ import Cart from "./components/Cart.jsx";
 import Home from "./components/Home.jsx";
 import Orders from "./components/Orders.jsx";
 import Profile from "./components/Profile.jsx";
+import Merchant from "./components/Merchant.jsx";
+import AuthForm from "./components/AuthForm.jsx";
 import { fetchProducts } from "./api.js";
 import { PHOTO_CREDITS } from "./credits.js";
 
@@ -29,8 +31,8 @@ export default function App() {
   const [products, setProducts] = useState([]);
   const [loadError, setLoadError] = useState(null);
   const [cart, setCart] = useState(() => load("cart", {})); // { idProduit: quantité }
-  const [session, setSession] = useState(() => load("session", null)); // { token, name }
-  const [view, setView] = useState("home"); // "home", "shop", "orders" ou "profile"
+  const [session, setSession] = useState(() => load("session", null)); // { token, name, merchant }
+  const [view, setView] = useState("home"); // "home", "shop", "orders", "profile", "merchant" ou "login"
 
   useEffect(() => save("cart", cart), [cart]);
   useEffect(() => save("session", session), [session]);
@@ -81,6 +83,12 @@ export default function App() {
           <Home products={products} onShop={() => setView("shop")} />
         ) : view === "orders" && session ? (
           <Orders session={session} onExpired={logout} />
+        ) : view === "login" && !session ? (
+          <div className="mx-auto max-w-sm">
+            <AuthForm title="Connexion" onLogin={(s) => { setSession(s); setView(s.merchant ? "merchant" : "shop"); }} />
+          </div>
+        ) : view === "merchant" && session?.merchant ? (
+          <Merchant products={products} session={session} onExpired={logout} onChanged={refreshProducts} />
         ) : view === "profile" && session ? (
           // Le prénom affiché dans l'en-tête suit les modifications du profil.
           <Profile session={session} onExpired={logout} onNameChange={(name) => setSession({ ...session, name })} />

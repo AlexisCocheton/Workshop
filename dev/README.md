@@ -32,6 +32,15 @@ compté dans les métriques que lit le détecteur. Pendant l'incident, le paieme
 | `GET /shop/profile` | Profil du client connecté : e-mail, prénom, téléphone, adresse (jamais le mot de passe) |
 | `PUT /shop/profile` | Modification du profil (e-mail unique, code postal à 5 chiffres) |
 | `PUT /shop/profile/password` | Changement de mot de passe : l'ancien est exigé, le jeton seul ne suffit pas |
+| `POST /shop/merchant/products/{id}/restock` | Marchand : ajoute `quantity` (1 à 10 000) au stock d'une confiserie |
+| `POST /shop/merchant/products` | Marchand : ajoute une confiserie (nom, description, prix, stock, emoji) |
+
+Le compte marchand est défini par `SHOP_MERCHANT_EMAIL` et `SHOP_MERCHANT_PASSWORD`
+dans `.env` : l'`api` le crée (ou lui redonne son rôle) à chaque démarrage. On ne
+peut pas devenir marchand en s'inscrivant. Le marchand se connecte par le lien
+« Connexion » de l'en-tête et obtient l'onglet « Espace marchand ». Le rôle
+(`customers.is_merchant`) est relu en base à chaque appel `/shop/merchant/*` :
+un client reçoit 403.
 
 Le jeton client porte l'audience `customer` : il ne sert ni sur `/transactions`
 ni au back-office. Le site ne recharge le catalogue qu'à l'ouverture et après une

@@ -58,6 +58,9 @@ services:
       DASHBOARD_ORIGINS: ${DASHBOARD_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       # Boutique (CORS) : ajouter http://<IP du PC Hôte>:3002 pour l'ouvrir depuis le réseau.
       SHOP_ORIGINS: ${SHOP_ORIGINS:-http://localhost:3002,http://127.0.0.1:3002}
+      # Compte marchand de la boutique (vide = pas de compte marchand).
+      SHOP_MERCHANT_EMAIL: ${SHOP_MERCHANT_EMAIL:-}
+      SHOP_MERCHANT_PASSWORD: ${SHOP_MERCHANT_PASSWORD:-}
     # Durcissement : pas d'élévation de privilèges, aucune capability Linux.
     security_opt:
       - no-new-privileges:true

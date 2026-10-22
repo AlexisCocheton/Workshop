@@ -33,7 +33,9 @@ CREATE TABLE IF NOT EXISTS customers (
     phone          TEXT NOT NULL DEFAULT '',
     street         TEXT NOT NULL DEFAULT '',
     postal_code    TEXT NOT NULL DEFAULT '',
-    city           TEXT NOT NULL DEFAULT ''
+    city           TEXT NOT NULL DEFAULT '',
+    -- Compte marchand (stock, catalogue) : seul celui de SHOP_MERCHANT_EMAIL, créé par l'API.
+    is_merchant    BOOLEAN NOT NULL DEFAULT false
 );
 
 -- Commandes : chacune est payée par une transaction.

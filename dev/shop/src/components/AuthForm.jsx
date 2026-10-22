@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { login, register } from "../api.js";
 
-// Connexion ou création de compte client, demandée au moment de payer.
-export default function AuthForm({ onLogin }) {
+// Connexion ou création de compte client, demandée au moment de payer (ou depuis l'en-tête).
+export default function AuthForm({ onLogin, title = "Connectez-vous pour payer" }) {
   const [mode, setMode] = useState("login"); // "login" ou "register"
   const [form, setForm] = useState({ email: "", name: "", password: "" });
   const [error, setError] = useState(null);
@@ -30,7 +30,7 @@ export default function AuthForm({ onLogin }) {
   return (
     <form onSubmit={submit} className="mt-4 space-y-3 rounded-xl bg-candy-light/50 p-4">
       <p className="text-sm font-semibold">
-        {mode === "login" ? "Connectez-vous pour payer" : "Créez votre compte"}
+        {mode === "login" ? title : "Créez votre compte"}
       </p>
       {mode === "register" && (
         <label className="block text-sm">

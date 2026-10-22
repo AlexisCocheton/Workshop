@@ -37,4 +37,10 @@ export const placeOrder = (token, cart) =>
     body: { items: Object.entries(cart).map(([id, quantity]) => ({ product_id: Number(id), quantity })) },
   });
 
+// Espace marchand : l'API vérifie le rôle à chaque appel (403 pour un client).
+export const restockProduct = (token, productId, quantity) =>
+  call(`/shop/merchant/products/${productId}/restock`, { method: "POST", token, body: { quantity } });
+// product : { name, description, price, stock, emoji }
+export const createProduct = (token, product) => call("/shop/merchant/products", { method: "POST", token, body: product });
+
 export const euros = (amount) => amount.toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
