@@ -112,7 +112,7 @@ function Dashboard({ onLogout }) {
         </header>
 
         <StatusBanner status={status} events={events} fun={fun} />
-        <ServiceCards status={status} events={events} />
+        <ServiceCards status={status} events={events} wafBlocks={wafBlocks} />
         <Timeline history={history} events={events} />
 
         <div className="grid gap-5 lg:grid-cols-2">
