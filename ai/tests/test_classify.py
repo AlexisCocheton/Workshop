@@ -43,3 +43,19 @@ def test_attaque_prioritaire_sur_erreur_serveur():
 def test_anomalie_sans_feature_dominante_est_unknown():
     # Tout est à peine au-dessus de la normale : aucune cause ne ressort.
     assert classify(feats(req_rate=1.2, err_4xx_rate=0.8), api_healthy=True)["category"] == "unknown"
+
+
+def test_blocages_waf_est_app_attack():
+    # Pic de blocages WAF (scan/injection) -> attaque applicative.
+    result = classify(feats(waf_blocks=8.0), api_healthy=True)
+    assert result["category"] == "app_attack"
+    assert result["suspect_feature"] == "waf_blocks"
+
+
+def test_suspect_feature_coherente_avec_categorie():
+    # Une feature anormalement BASSE (z très négatif) est top-1 par valeur absolue,
+    # mais la catégorie vient d'une feature HAUTE : suspect_feature doit être la feature
+    # haute (cohérente avec la catégorie), pas la basse sans rapport.
+    result = classify(feats(req_rate=-6.0, err_5xx_rate=4.0), api_healthy=True)
+    assert result["category"] == "service_error"
+    assert result["suspect_feature"] == "err_5xx_rate"  # pas req_rate (bas)

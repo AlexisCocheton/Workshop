@@ -40,17 +40,21 @@ def classify(top_features: list[dict], api_healthy: bool) -> dict:
     if not high:
         return _result("unknown", "Comportement anormal sans cause dominante identifiée.", worst)
 
-    # On catégorise selon la feature la PLUS anormale, pas selon un ordre fixe :
-    # pendant l'exploit du callback, le trafic monte en même temps que les 5xx ;
-    # c'est le signal le plus fort qui dit s'il s'agit d'une panne ou d'un afflux.
+    # On catégorise selon la feature la plus anormalement HAUTE (max des z positifs),
+    # pas selon un ordre fixe : pendant l'exploit du callback, le trafic monte en même
+    # temps que les 5xx ; c'est le signal le plus fort qui dit s'il s'agit d'une panne
+    # ou d'un afflux. suspect_feature = cette même feature (dominante), pour que la
+    # catégorie et la feature en cause soient toujours cohérentes : sinon une feature
+    # anormalement BASSE (top-1 par valeur absolue) pourrait être affichée à tort.
     dominante = max(high, key=high.get)
     categories = {
         "err_4xx_rate": ("app_attack", "Beaucoup de requêtes refusées : scan, injection ou brute force probable."),
         "req_rate": ("dos", "Afflux massif de requêtes : déni de service probable."),
         "err_5xx_rate": ("service_error", "L'API renvoie des erreurs internes (5xx) : panne ou vulnérabilité exploitée."),
+        "waf_blocks": ("app_attack", "Beaucoup de requêtes bloquées par le WAF : scan ou injection probable."),
     }
     category, reason = categories.get(dominante, ("unknown", "Comportement anormal sans cause dominante identifiée."))
-    return _result(category, reason, worst)
+    return _result(category, reason, dominante)
 
 
 def _result(category: str, reason: str, suspect_feature: str | None) -> dict:
