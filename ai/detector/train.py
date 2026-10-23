@@ -33,8 +33,11 @@ def train(normal: pd.DataFrame):
     """
     # n_neighbors doit rester bien inférieur au nombre de points, sinon LOF
     # dégénère (sur des collectes courtes de ~45 points, 20 voisins donnent des
-    # scores aberrants). On le plafonne à un tiers du jeu, borné entre 5 et 20.
-    n_neighbors = max(5, min(20, len(normal) // 3))
+    # scores aberrants). On vise un tiers du jeu, borné entre 5 et 40 : sur une
+    # collecte longue (~170 points), trop peu de voisins rend la frontière de
+    # densité sensible à un point normal isolé (faux positif) ; ~35-40 voisins la
+    # lissent et éliminent ce faux positif sans manquer d'attaque (vérifié).
+    n_neighbors = max(5, min(40, len(normal) // 3))
     model = make_pipeline(
         StandardScaler(),
         LocalOutlierFactor(n_neighbors=n_neighbors, novelty=True, contamination=CONTAMINATION),
